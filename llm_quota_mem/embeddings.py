@@ -11,14 +11,23 @@ class Embedder:
 
     async def embed_text(self, text: str) -> List[float]:
         # Priority: OpenAI > Google > Groq (if supported)
+        vector = None
         if settings.OPENAI_API_KEY:
-            return await self._embed_openai(text)
+            vector = await self._embed_openai(text)
         elif settings.GOOGLE_API_KEY:
-            return await self._embed_google(text)
-        else:
-            # Fallback to a zero-vector if no provider is available (to not crash)
-            logger.warning("No embedding provider configured. Returning zero vector.")
-            return [0.0] * 1536
+            vector = await self._embed_google(text)
+
+        if vector:
+            # Ensure consistent 1536 dimensions
+            if len(vector) < 1536:
+                vector = vector + [0.0] * (1536 - len(vector))
+            elif len(vector) > 1536:
+                vector = vector[:1536]
+            return vector
+
+        # Fallback to a zero-vector if no provider is available (to not crash)
+        logger.warning("No embedding provider configured. Returning zero vector.")
+        return [0.0] * 1536
 
     async def _embed_openai(self, text: str) -> List[float]:
         url = f"{settings.OPENAI_BASE_URL}/embeddings"

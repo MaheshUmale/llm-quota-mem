@@ -103,7 +103,7 @@ class LLMRouter:
         response.raise_for_status()
         return response.json()
 
-    def _rank_providers(self, preferred_model: Optional[str] = None) -> List[ProviderConfig]:
+    def _rank_providers(self, preferred_model: Optional[str] = None, domain: str = "ea") -> List[ProviderConfig]:
         # Filter healthy providers and rank by priority
         now = time.time()
         healthy = []
@@ -120,11 +120,25 @@ class LLMRouter:
                 healthy.append(p)
 
         # Sort by priority (lower is better)
-        healthy.sort(key=lambda x: x.priority)
+        def sort_key(p: ProviderConfig):
+            score = p.priority
+            # Domain-specific optimization: Groq/SambaNova are prioritized for EA due to speed/throughput
+            if domain == "ea" and p.name in ["groq", "sambanova"]:
+                score -= 5
+            elif domain == "coding" and p.name in ["openai", "google"]:
+                score -= 2
+
+            # Use preferred model if it matches
+            if preferred_model and preferred_model in p.models:
+                score -= 10
+
+            return score
+
+        healthy.sort(key=sort_key)
         return healthy
 
-    async def call(self, request: LLMRequest) -> str:
-        providers = self._rank_providers(request.model)
+    async def call(self, request: LLMRequest, domain: str = "ea") -> str:
+        providers = self._rank_providers(request.model, domain=domain)
 
         last_error = None
         for provider in providers:

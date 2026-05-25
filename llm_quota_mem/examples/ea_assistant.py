@@ -12,9 +12,8 @@ async def run_ea_assistant():
     # User query
     query = "How should we migrate our legacy monolithic ERP to a cloud-native architecture?"
 
-    # 1. Recall from memory (placeholder vector)
-    # In a real app, you'd use an embedding model here
-    memories = await memory.recall(query_vector=[0.1] * 1536)
+    # 1. Recall from memory
+    memories = await memory.recall(query=query)
 
     # 2. Build messages with EA domain prompt
     messages = [

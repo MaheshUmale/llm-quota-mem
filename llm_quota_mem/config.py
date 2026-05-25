@@ -1,7 +1,8 @@
 import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pathlib import Path
+from ruamel.yaml import YAML
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="allow")
@@ -29,6 +30,14 @@ class Settings(BaseSettings):
     MAX_TOKENS: int = 4096
 
 settings = Settings()
+
+def load_yaml_config(config_path: str = "config.yaml") -> Dict[str, Any]:
+    yaml = YAML(typ="safe")
+    path = Path(config_path)
+    if path.exists():
+        with open(path, "r") as f:
+            return yaml.load(f) or {}
+    return {}
 
 # Ensure directories exist
 Path(settings.CACHE_DIR).mkdir(exist_ok=True)

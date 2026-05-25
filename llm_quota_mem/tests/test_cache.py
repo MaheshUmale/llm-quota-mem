@@ -1,8 +1,8 @@
 import pytest
 from llm_quota_mem.cache import ResponseCache
 
-def test_cache(tmp_path):
-    import os
+@pytest.mark.asyncio
+async def test_cache(tmp_path):
     from llm_quota_mem.config import settings
     settings.CACHE_DIR = str(tmp_path / "cache")
 
@@ -11,6 +11,6 @@ def test_cache(tmp_path):
     model = "test-model"
     response = "Test response"
 
-    assert cache.get(prompt, model) is None
-    cache.set(prompt, model, response)
-    assert cache.get(prompt, model) == response
+    assert await cache.get(prompt, model) is None
+    await cache.set(prompt, model, response)
+    assert await cache.get(prompt, model) == response

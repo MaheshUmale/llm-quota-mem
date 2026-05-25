@@ -36,3 +36,35 @@ def compress_prompt(messages: List[Dict[str, Any]], max_tokens: int = 2000, mode
             break
 
     return system_msgs + result_msgs
+
+class CostTracker:
+    """Tracks token usage and estimated costs."""
+    def __init__(self):
+        self.usage = {} # model -> {"prompt_tokens": int, "completion_tokens": int}
+        # Simplified costs per 1k tokens (placeholder values)
+        self.pricing = {
+            "gpt-4o": {"prompt": 0.005, "completion": 0.015},
+            "gpt-4o-mini": {"prompt": 0.00015, "completion": 0.0006},
+            "claude-3-5-sonnet-20240620": {"prompt": 0.003, "completion": 0.015},
+            "default": {"prompt": 0.0, "completion": 0.0} # free tiers
+        }
+
+    def add_usage(self, model: str, prompt_tokens: int, completion_tokens: int):
+        if model not in self.usage:
+            self.usage[model] = {"prompt_tokens": 0, "completion_tokens": 0}
+        self.usage[model]["prompt_tokens"] += prompt_tokens
+        self.usage[model]["completion_tokens"] += completion_tokens
+
+    def get_total_cost(self) -> float:
+        total = 0.0
+        for model, counts in self.usage.items():
+            prices = self.pricing.get(model, self.pricing["default"])
+            total += (counts["prompt_tokens"] / 1000) * prices["prompt"]
+            total += (counts["completion_tokens"] / 1000) * prices["completion"]
+        return total
+
+    def get_report(self) -> Dict[str, Any]:
+        return {
+            "usage": self.usage,
+            "total_estimated_cost_usd": self.get_total_cost()
+        }
