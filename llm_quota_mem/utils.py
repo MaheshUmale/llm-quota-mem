@@ -37,6 +37,30 @@ def compress_prompt(messages: List[Dict[str, Any]], max_tokens: int = 2000, mode
 
     return system_msgs + result_msgs
 
+async def semantic_compress(messages: List[Dict[str, Any]], router: Any) -> str:
+    """Uses a cheap LLM to summarize context before truncation."""
+    if not messages:
+        return ""
+
+    text_to_summarize = "\n".join([f"{m['role']}: {m['content']}" for m in messages if m['role'] != 'system'])
+
+    prompt = (
+        "Summarize the following conversation thread concisely, "
+        "preserving key decisions and architectural patterns mentioned:\n\n"
+        f"{text_to_summarize}"
+    )
+
+    from .router import LLMRequest, Message
+    try:
+        # Use simple complexity to trigger cheapest model
+        summary = await router.call(
+            LLMRequest(messages=[Message(role="user", content=prompt)]),
+            domain="general"
+        )
+        return summary
+    except Exception as e:
+        return f"Error during summary: {e}. Original message count: {len(messages)}"
+
 class CostTracker:
     """Tracks token usage and estimated costs."""
     def __init__(self):
