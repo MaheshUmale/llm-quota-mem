@@ -1,6 +1,7 @@
 import json
 import os
 import time
+import asyncio
 import numpy as np
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -59,14 +60,24 @@ class SimpleVectorStore:
             return []
 
         similarities = np.dot(self.vectors, query_vec) / (norms * q_norm)
-        top_indices = np.argsort(similarities)[::-1][:top_k]
+
+        # Apply time-based decay
+        now = time.time()
+        decay_factor = 0.1 # Adjust for faster/slower decay
 
         results = []
-        for idx in top_indices:
+        for idx, sim in enumerate(similarities):
+            # Ebbinghaus curve approximation: score = similarity * e^(-decay * time_diff)
+            time_diff = (now - self.metadata[idx]["timestamp"]) / 3600 # hours
+            decayed_score = sim * np.exp(-decay_factor * time_diff)
+
             res = self.metadata[idx].copy()
-            res["score"] = float(similarities[idx])
+            res["score"] = float(decayed_score)
             results.append(res)
-        return results
+
+        # Sort by decayed score
+        results.sort(key=lambda x: x["score"], reverse=True)
+        return results[:top_k]
 
 class HybridMemory:
     """Combines semantic long-term memory and structured session state."""
@@ -83,12 +94,16 @@ class HybridMemory:
         meta = metadata or {}
         meta["user_id"] = self.user_id
         meta["project_id"] = self.project_id
-        self.vector_store.add(content, vector, meta)
+        await asyncio.to_thread(self.vector_store.add, content, vector, meta)
 
-    async def recall(self, query: str, top_k: int = 5) -> List[str]:
-        """Recall relevant memories based on query string."""
-        query_vector = await self.embedder.embed_text(query)
-        results = self.vector_store.search(query_vector, top_k=top_k)
+    async def recall(self, query: str = None, query_vector: List[float] = None, top_k: int = 5) -> List[str]:
+        """Recall relevant memories based on query string or vector."""
+        if query_vector is None and query:
+            query_vector = await self.embedder.embed_text(query)
+
+        if query_vector is None:
+            return []
+        results = await asyncio.to_thread(self.vector_store.search, query_vector, top_k=top_k)
         return [res["text"] for res in results if res.get("score", 0) > 0.7]
 
     async def get_context_summary(self) -> str:

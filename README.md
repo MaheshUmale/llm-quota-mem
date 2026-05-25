@@ -38,6 +38,28 @@ DEFAULT_MODEL=gpt-4o-mini
 TEMPERATURE=0.7
 ```
 
+## Adding New Providers
+
+To add a new LLM provider:
+
+1.  **Update `llm_quota_mem/config.py`**: Add the new API key and base URL to the `Settings` class.
+    ```python
+    class Settings(BaseSettings):
+        NEW_PROVIDER_API_KEY: Optional[str] = None
+        NEW_PROVIDER_BASE_URL: str = "https://api.newprovider.com/v1"
+    ```
+2.  **Update `llm_quota_mem/router.py`**: Initialize the new provider in `_init_providers`.
+    ```python
+    if settings.NEW_PROVIDER_API_KEY:
+        providers["new_provider"] = ProviderConfig(
+            name="new_provider",
+            base_url=settings.NEW_PROVIDER_BASE_URL,
+            api_key=settings.NEW_PROVIDER_API_KEY,
+            models=["model-1", "model-2"],
+            priority=7
+        )
+    ```
+
 ## Usage
 
 ### Unified LLM Router

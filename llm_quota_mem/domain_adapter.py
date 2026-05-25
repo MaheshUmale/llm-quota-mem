@@ -35,3 +35,19 @@ class DomainAdapter:
     @staticmethod
     def get_aws_well_architected_guidance() -> str:
         return "Focus on the 6 pillars: Operational Excellence, Security, Reliability, Performance Efficiency, Cost Optimization, Sustainability."
+
+    @staticmethod
+    def get_architectural_patterns() -> Dict[str, str]:
+        return {
+            "Strangler Fig": "Gradually replace legacy systems by wrapping them with new services.",
+            "Sidecar": "Deploy auxiliary features (logging, security) as separate containers.",
+            "Event Sourcing": "Capture all changes to application state as a sequence of events.",
+            "CQRS": "Separate read and write operations for data storage.",
+            "Circuit Breaker": "Prevent cascading failures by failing fast when a service is likely down."
+        }
+
+    @staticmethod
+    def get_knowledge_injection(pattern_name: str) -> str:
+        patterns = DomainAdapter.get_architectural_patterns()
+        description = patterns.get(pattern_name, "Pattern not found.")
+        return f"Architectural Pattern: {pattern_name}\nDescription: {description}"
