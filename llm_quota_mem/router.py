@@ -74,13 +74,22 @@ class LLMRouter:
                 priority=4
             )
 
+        if settings.OPENROUTER_API_KEY:
+            providers["openrouter"] = ProviderConfig(
+                name="openrouter",
+                base_url=settings.OPENROUTER_BASE_URL,
+                api_key=settings.OPENROUTER_API_KEY,
+                models=["google/gemini-2.0-flash-001", "anthropic/claude-3.5-sonnet"],
+                priority=5
+            )
+
         if settings.OPENAI_API_KEY:
             providers["openai"] = ProviderConfig(
                 name="openai",
                 base_url=settings.OPENAI_BASE_URL,
                 api_key=settings.OPENAI_API_KEY,
                 models=["gpt-4o", "gpt-4o-mini"],
-                priority=5
+                priority=6
             )
 
         return providers

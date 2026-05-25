@@ -13,10 +13,12 @@ class Settings(BaseSettings):
     GROQ_API_KEY: Optional[str] = None
     SAMBANOVA_API_KEY: Optional[str] = None
     TOGETHER_API_KEY: Optional[str] = None
+    OPENROUTER_API_KEY: Optional[str] = None
 
     # Base URLs
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     SAMBANOVA_BASE_URL: str = "https://api.sambanova.ai/v1"
     TOGETHER_BASE_URL: str = "https://api.together.xyz/v1"
 
