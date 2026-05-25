@@ -4,10 +4,16 @@ import logging
 import json
 import time
 from typing import List, Dict, Any, Optional
+from enum import Enum
 from pydantic import BaseModel, Field
 from .config import settings
 
 logger = logging.getLogger(__name__)
+
+class TaskComplexity(str, Enum):
+    SIMPLE = "simple"   # Pair programming, one-liners, tool execution (Haiku class)
+    DEV = "dev"         # Implementation, debugging, logic (Sonnet class)
+    ARCH = "arch"       # Complex architecture, reasoning, tradeoffs (Opus class)
 
 class Message(BaseModel):
     role: str
@@ -30,9 +36,24 @@ class ProviderConfig(BaseModel):
     last_failure: float = 0
     failure_count: int = 0
 
+class ComplexityScouter:
+    @staticmethod
+    def scout(messages: List[Message]) -> TaskComplexity:
+        full_text = " ".join([m.content.lower() for m in messages[-2:]])
+
+        arch_keywords = ["architecture", "tradeoff", "system design", "component diagram", "togaf", "c4"]
+        dev_keywords = ["implement", "write a", "fix", "debug", "test", "refactor"]
+
+        if any(kw in full_text for kw in arch_keywords):
+            return TaskComplexity.ARCH
+        if any(kw in full_text for kw in dev_keywords):
+            return TaskComplexity.DEV
+        return TaskComplexity.SIMPLE
+
 class LLMRouter:
     def __init__(self):
         self.providers: Dict[str, ProviderConfig] = self._init_providers()
+        self.scouter = ComplexityScouter()
         self.client = httpx.AsyncClient(timeout=60.0)
 
     def _init_providers(self) -> Dict[str, ProviderConfig]:
@@ -156,6 +177,17 @@ class LLMRouter:
         return healthy
 
     async def call(self, request: LLMRequest, domain: str = "ea") -> str:
+        # ECC-inspired Task Tiering
+        complexity = self.scouter.scout(request.messages)
+        logger.info(f"Task complexity scouted: {complexity}")
+
+        # Override model if not specified based on complexity to save tokens/quota
+        if not request.model:
+            if complexity == TaskComplexity.SIMPLE:
+                request.model = "gpt-4o-mini" # or haiku if available
+            elif complexity == TaskComplexity.DEV:
+                request.model = "llama-3.3-70b-versatile"
+
         providers = self._rank_providers(request.model, domain=domain)
 
         last_error = None
