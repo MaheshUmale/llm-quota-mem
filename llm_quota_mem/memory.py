@@ -8,6 +8,7 @@ from pathlib import Path
 import logging
 from .config import settings
 from .embeddings import Embedder
+from .graph import KnowledgeGraph
 
 logger = logging.getLogger(__name__)
 
@@ -80,12 +81,13 @@ class SimpleVectorStore:
         return results[:top_k]
 
 class HybridMemory:
-    """Combines semantic long-term memory and structured session state."""
+    """Combines semantic long-term memory, structured session state, and knowledge graph."""
     def __init__(self, user_id: str, project_id: str):
         self.user_id = user_id
         self.project_id = project_id
         storage_dir = Path(settings.MEMORY_DIR) / user_id / project_id
         self.vector_store = SimpleVectorStore(str(storage_dir / "vectors"))
+        self.graph = KnowledgeGraph(str(storage_dir / "graph"))
         self.embedder = Embedder()
 
     async def add_memory(self, content: str, metadata: Optional[Dict[str, Any]] = None):
@@ -96,15 +98,31 @@ class HybridMemory:
         meta["project_id"] = self.project_id
         await asyncio.to_thread(self.vector_store.add, content, vector, meta)
 
-    async def recall(self, query: str = None, query_vector: List[float] = None, top_k: int = 5) -> List[str]:
-        """Recall relevant memories based on query string or vector."""
+    async def recall(self, query: str = None, query_vector: List[float] = None, top_k: int = 5) -> Dict[str, Any]:
+        """Recall relevant semantic memories and connected graph entities."""
         if query_vector is None and query:
             query_vector = await self.embedder.embed_text(query)
 
         if query_vector is None:
-            return []
-        results = await asyncio.to_thread(self.vector_store.search, query_vector, top_k=top_k)
-        return [res["text"] for res in results if res.get("score", 0) > 0.7]
+            return {"memories": [], "graph": []}
+
+        semantic_results = await asyncio.to_thread(self.vector_store.search, query_vector, top_k=top_k)
+        memories = [res["text"] for res in semantic_results if res.get("score", 0) > 0.7]
+
+        # Simple graph lookup if query matches an entity (placeholder logic)
+        graph_results = []
+        if query:
+            words = query.split()
+            for word in words:
+                if len(word) > 3:
+                    rels = self.graph.query(word)
+                    if rels:
+                        graph_results.append({"entity": word, "relations": rels})
+
+        return {
+            "memories": memories,
+            "graph": graph_results
+        }
 
     async def get_context_summary(self) -> str:
         """Get a summary of the stored memories."""

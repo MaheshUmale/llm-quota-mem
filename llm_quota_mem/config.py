@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     SAMBANOVA_BASE_URL: str = "https://api.sambanova.ai/v1"
     TOGETHER_BASE_URL: str = "https://api.together.xyz/v1"
+    LOCAL_SLM_URL: str = "http://localhost:11434/v1" # Default Ollama/Llama.cpp
+    LOCAL_SLM_ENABLED: bool = False
 
     # Memory & Cache
     CACHE_DIR: str = ".llm_cache"
