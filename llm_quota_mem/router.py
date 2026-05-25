@@ -92,6 +92,15 @@ class LLMRouter:
                 priority=6
             )
 
+        if settings.LOCAL_SLM_ENABLED:
+            providers["local"] = ProviderConfig(
+                name="local",
+                base_url=settings.LOCAL_SLM_URL,
+                api_key="local-key", # usually ignored
+                models=["llama3", "phi3", "mistral"],
+                priority=100 # Ultimate fallback
+            )
+
         return providers
 
     async def _call_provider(self, provider: ProviderConfig, request: LLMRequest) -> Dict[str, Any]:

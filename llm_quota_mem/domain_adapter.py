@@ -51,3 +51,34 @@ class DomainAdapter:
         patterns = DomainAdapter.get_architectural_patterns()
         description = patterns.get(pattern_name, "Pattern not found.")
         return f"Architectural Pattern: {pattern_name}\nDescription: {description}"
+
+    @staticmethod
+    def get_optimized_prompt(base_prompt: str, slm_size: str = "70B") -> str:
+        """
+        Adjusts prompt style based on model size.
+        Smaller models (3B-7B) get more explicit, structured instructions.
+        Larger models get more nuanced, reasoning-heavy prompts.
+        """
+        size_kb = 0
+        if "B" in slm_size:
+            try:
+                size_kb = int(slm_size.replace("B", ""))
+            except:
+                size_kb = 70
+
+        if size_kb <= 7:
+            return (
+                f"{base_prompt}\n\n"
+                "### STRICT INSTRUCTIONS FOR SMALL MODEL ###\n"
+                "1. Answer in bullet points only.\n"
+                "2. Do not use conversational filler.\n"
+                "3. Use exactly one Mermaid diagram if relevant."
+            )
+        elif size_kb <= 14:
+            return (
+                f"{base_prompt}\n\n"
+                "Focus on providing technical details and specific references. "
+                "Structure your response with clear headings."
+            )
+        else:
+            return base_prompt # Standard prompt for 70B+
