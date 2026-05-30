@@ -145,3 +145,4 @@ cython_debug/
 # LLM Quota Mem specific
 .llm_cache/
 .llm_memory/
+keys.json
