@@ -31,7 +31,16 @@ The server will start at `http://localhost:8000`. You can visit this URL in your
 6.  Set the **Model ID** to `coder:python:concise:gpt-4o` (this triggers the Expert Coder persona, Python skill, and Concise output skill to save your tokens).
 7.  **Enable Context**: Roo Code will automatically analyze your current file and project structure!
 
-### Option B: Using the "Continue" Extension
+### Option B: Using the Native "LLM Quota Mem" Extension
+We now provide a dedicated VS Code extension that manages the gateway server for you and provides a native chat sidebar.
+
+1.  Navigate to the `vscode-extension` folder in the repository.
+2.  Run `npm install` and `npm run compile`.
+3.  Open the folder in VS Code and press `F5` to start a development instance.
+4.  The "LLM Quota Mem" icon will appear in your Activity Bar.
+5.  The backend server will start automatically!
+
+### Option C: Using the "Continue" Extension
 1.  Install the **Continue** extension from the VS Code Marketplace.
 2.  Click on the Continue icon in the sidebar.
 3.  Click the gear icon (Settings) to open `config.json`.
