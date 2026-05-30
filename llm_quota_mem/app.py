@@ -6,6 +6,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional, Union
 from llm_quota_mem.router import LLMRouter, LLMRequest, Message
+from llm_quota_mem.memory import HybridMemory
+from llm_quota_mem.personas import persona_manager
 from llm_quota_mem.config import settings
 import logging
 
@@ -34,6 +36,12 @@ class ChatCompletionRequest(BaseModel):
     temperature: Optional[float] = 0.7
     max_tokens: Optional[int] = 4096
     stream: Optional[bool] = False
+    # Custom Extensions
+    persona: Optional[str] = "general"
+    skills: Optional[List[str]] = []
+    user_id: Optional[str] = "default_user"
+    project_id: Optional[str] = "default_project"
+    use_memory: Optional[bool] = True
 
 @app.get("/v1/models")
 async def list_models():
@@ -52,30 +60,65 @@ async def list_models():
 
 @app.post("/v1/chat/completions")
 async def chat_completions(request: ChatCompletionRequest):
-    """OpenAI-compatible chat completions endpoint."""
+    """OpenAI-compatible chat completions endpoint with Persona and Memory hooks."""
     try:
-        # Convert to internal Message format
-        messages = [Message(role=m["role"], content=m["content"]) for m in request.messages]
+        # 1. Initialize Memory for this session
+        memory = HybridMemory(user_id=request.user_id, project_id=request.project_id)
 
-        # Create LLMRequest
+        # 2. PRE-HOOK: Memory Recall
+        context = ""
+        if request.use_memory:
+            last_message = request.messages[-1]["content"] if request.messages else ""
+            recall_data = await memory.recall(query=last_message)
+            if recall_data["memories"]:
+                context = "\nRELEVANT CONTEXT FROM PREVIOUS SESSIONS:\n" + "\n".join(recall_data["memories"])
+
+        # 3. Apply Persona and Skills
+        system_prompt = ""
+        p = persona_manager.get_persona(request.persona)
+        if p:
+            system_prompt = p.system_prompt
+
+        for skill_name in request.skills:
+            s = persona_manager.get_skill(skill_name)
+            if s:
+                system_prompt += f"\n{s.instructions}"
+
+        if context:
+            system_prompt += context
+
+        # 4. Prepare Messages
+        final_messages = []
+        if system_prompt:
+            final_messages.append(Message(role="system", content=system_prompt))
+
+        for m in request.messages:
+            if m["role"] != "system": # Override existing system prompt
+                final_messages.append(Message(role=m["role"], content=m["content"]))
+
+        # 5. Create LLMRequest
         llm_request = LLMRequest(
-            messages=messages,
+            messages=final_messages,
             model=request.model,
             temperature=request.temperature or 0.7,
             max_tokens=request.max_tokens or 4096,
             stream=request.stream or False
         )
 
-        # Determine domain (basic heuristic: if "code" or "python" in messages, it's coding)
-        domain = "ea"
-        full_text = " ".join([m.content.lower() for m in messages])
-        if any(kw in full_text for kw in ["code", "python", "javascript", "debug", "implement"]):
+        # Determine domain
+        domain = "general"
+        if request.persona == "coder" or any(s in request.skills for s in ["python"]):
             domain = "coding"
 
-        # Call router
+        # 6. Call router
         content = await router.call(llm_request, domain=domain)
 
-        # Format response as OpenAI-compatible
+        # 7. POST-HOOK: Memory Storage
+        if request.use_memory and request.messages:
+            user_msg = request.messages[-1]["content"]
+            await memory.add_memory(f"User: {user_msg}\nAssistant: {content}")
+
+        # 8. Format response as OpenAI-compatible
         return {
             "id": f"chatcmpl-{os.urandom(12).hex()}",
             "object": "chat.completion",
