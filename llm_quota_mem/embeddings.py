@@ -40,13 +40,13 @@ class Embedder:
 
     async def _embed_google(self, text: str) -> List[float]:
         # Google uses a different endpoint structure for embeddings
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key={settings.GOOGLE_API_KEY}"
+        # Using gemini-embedding-001 as text-embedding-004 is deprecated and returns 404 in v1beta
+        url = f"https://generativelanguage.googleapis.com/v1/models/gemini-embedding-001:embedContent?key={settings.GOOGLE_API_KEY}"
         payload = {"content": {"parts": [{"text": text}]}}
 
         response = await self.client.post(url, json=payload)
         response.raise_for_status()
-        # Google returns 768 dims by default, we might need to pad/truncate if consistency is needed
-        # but for internal use it's fine as long as we stay consistent within one run.
+        # gemini-embedding-001 returns 768 dimensions.
         return response.json()["embedding"]["values"]
 
     async def close(self):

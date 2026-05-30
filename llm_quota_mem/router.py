@@ -7,13 +7,14 @@ from typing import List, Dict, Any, Optional
 from enum import Enum
 from pydantic import BaseModel, Field
 from .config import settings
+from .intelligence import intelligence_manager
 
 logger = logging.getLogger(__name__)
 
 class TaskComplexity(str, Enum):
-    SIMPLE = "simple"   # Quick responses, one-liners (fast models)
-    DEV = "dev"         # Implementation, logic (balanced models)
-    HEAVY = "heavy"     # Complex reasoning, long context (premium models)
+    SIMPLE = "fast"     # Quick responses, one-liners (fast models)
+    DEV = "coding"      # Implementation, logic (balanced models)
+    HEAVY = "reasoning" # Complex reasoning, long context (premium models)
 
 class Message(BaseModel):
     role: str
@@ -41,12 +42,12 @@ class ComplexityScouter:
     def scout(messages: List[Message]) -> TaskComplexity:
         full_text = " ".join([m.content.lower() for m in messages[-2:]])
 
-        heavy_keywords = ["complex", "reasoning", "deep dive", "analyze", "summarize everything"]
-        dev_keywords = ["implement", "write a", "fix", "debug", "test", "refactor", "code"]
+        reasoning_keywords = ["complex", "reasoning", "deep dive", "analyze", "summarize everything", "architecture", "system design", "tradeoff"]
+        coding_keywords = ["implement", "write a", "fix", "debug", "test", "refactor", "code", "python", "javascript", "script"]
 
-        if any(kw in full_text for kw in heavy_keywords) or len(full_text) > 2000:
+        if any(kw in full_text for kw in reasoning_keywords) or len(full_text) > 2000:
             return TaskComplexity.HEAVY
-        if any(kw in full_text for kw in dev_keywords):
+        if any(kw in full_text for kw in coding_keywords):
             return TaskComplexity.DEV
         return TaskComplexity.SIMPLE
 
@@ -228,12 +229,25 @@ class LLMRouter:
         complexity = self.scouter.scout(request.messages)
         logger.info(f"Task complexity scouted: {complexity}")
 
-        # Override model if not specified based on complexity to save tokens/quota
-        if not request.model:
-            if complexity == TaskComplexity.SIMPLE:
-                request.model = "gpt-4o-mini"
-            elif complexity == TaskComplexity.DEV:
-                request.model = "llama-3.3-70b-versatile"
+        # Intelligent Model Selection
+        if not request.model or request.model == "default":
+            # Map complexity to task types for intelligence manager
+            task_type = str(complexity.value)
+            active_providers = [p.name for p in self.providers.values() if p.healthy and p.api_key]
+
+            best_m = intelligence_manager.get_best_model(task_type, active_providers)
+            if best_m:
+                logger.info(f"Intelligently selected model: {best_m.name} from {best_m.provider} for task {task_type}")
+                request.model = best_m.name
+                domain = task_type
+            else:
+                # Basic fallback
+                if complexity == TaskComplexity.SIMPLE:
+                    request.model = "gpt-4o-mini"
+                    domain = "fast"
+                elif complexity == TaskComplexity.DEV:
+                    request.model = "llama-3.3-70b-versatile"
+                    domain = "coding"
 
         providers = self._rank_providers(request.model, domain=domain)
 
