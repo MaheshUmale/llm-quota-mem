@@ -82,6 +82,34 @@ await hooks.on_session_stop("We decided to use Kafka for decoupling.")
 ### EA Skills
 ECC-compatible `SKILL.md` manifests are available in `llm_quota_mem/integrations/ecc/skills/` for TOGAF, AWS, and C4 Model optimization.
 
+## Quick Start Guide
+
+Verify your installation and start using the unified app in 3 steps:
+
+1. **Start the Unified Server**:
+   ```bash
+   python -m llm_quota_mem.app
+   ```
+   The server runs on `http://localhost:8000` with an OpenAI-compatible API.
+
+2. **Run a Quick Test**:
+   ```bash
+   python llm_quota_mem/examples/quick_start.py
+   ```
+
+3. **VS Code Integration**:
+   - Install the **Continue** extension in VS Code.
+   - Open Continue settings and add a new model:
+     ```json
+     {
+       "title": "llm-quota-mem",
+       "model": "gpt-4o",
+       "apiBase": "http://localhost:8000/v1",
+       "provider": "openai"
+     }
+     ```
+   - Now you can use the unified LLM for coding directly in VS Code!
+
 ## Usage
 
 ### Unified LLM Router
