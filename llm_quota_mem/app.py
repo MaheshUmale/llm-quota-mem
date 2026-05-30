@@ -1,9 +1,10 @@
 import os
 import time
+import json
 import asyncio
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException, Form
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional, Union
 from llm_quota_mem.router import LLMRouter, LLMRequest, Message
@@ -137,7 +138,32 @@ async def chat_completions(request: ChatCompletionRequest):
             domain = "coding"
 
         # 6. Call router
-        content = await router.call(llm_request, domain=domain)
+        result = await router.call(llm_request, domain=domain)
+
+        # Handle Streaming Response
+        if request.stream:
+            async def stream_generator():
+                full_content = ""
+                async for chunk in result:
+                    yield f"{chunk}\n\n"
+                    # Try to extract content for memory
+                    try:
+                        data = json.loads(chunk.replace("data: ", ""))
+                        delta = data["choices"][0].get("delta", {})
+                        if "content" in delta:
+                            full_content += delta["content"]
+                    except:
+                        pass
+
+                # Post-hook for memory after stream ends
+                if request.use_memory and request.messages and full_content:
+                    user_msg = request.messages[-1]["content"]
+                    await memory.add_memory(f"User: {user_msg}\nAssistant: {full_content}")
+
+            return StreamingResponse(stream_generator(), media_type="text/event-stream")
+
+        # Handle Standard Response
+        content = result
 
         # 7. POST-HOOK: Memory Storage
         if request.use_memory and request.messages:
@@ -173,6 +199,44 @@ async def chat_completions(request: ChatCompletionRequest):
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "providers": {name: p.healthy for name, p in router.providers.items()}}
+
+# OpenAI-compatible embeddings endpoint
+class EmbeddingRequest(BaseModel):
+    input: Union[str, List[str]]
+    model: str
+    user: Optional[str] = None
+
+@app.post("/v1/embeddings")
+async def create_embeddings(request: EmbeddingRequest):
+    """OpenAI-compatible embeddings endpoint for project indexing."""
+    try:
+        from llm_quota_mem.embeddings import Embedder
+        embedder = Embedder()
+
+        inputs = [request.input] if isinstance(request.input, str) else request.input
+        data = []
+        for i, text in enumerate(inputs):
+            vector = await embedder.embed_text(text)
+            data.append({
+                "object": "embedding",
+                "index": i,
+                "embedding": vector
+            })
+
+        await embedder.close()
+
+        return {
+            "object": "list",
+            "data": data,
+            "model": request.model,
+            "usage": {
+                "prompt_tokens": -1,
+                "total_tokens": -1
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error in create_embeddings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():

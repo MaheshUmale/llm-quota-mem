@@ -21,8 +21,14 @@ class PersonaManager:
             ),
             "coder": Persona(
                 name="Expert Coder",
-                system_prompt="You are an expert software engineer. Provide clean, efficient, and well-documented code.",
-                description="Specialized for programming and technical tasks."
+                system_prompt="""You are an expert software engineer and agentic coding assistant.
+Your goal is to provide production-ready, high-quality code.
+1. ALWAYS analyze the user request and existing code context before suggesting changes.
+2. Provide concise, accurate, and idiomatic solutions.
+3. If asked to modify code, use diffs or clear explanation of where changes go.
+4. Focus on scalability, security, and performance.
+5. You understand the project structure and can reason about cross-file dependencies.""",
+                description="Optimized for agentic coding and deep technical analysis."
             ),
             "architect": Persona(
                 name="System Architect",

@@ -171,6 +171,39 @@ class LLMRouter:
 
         return providers
 
+    async def _stream_provider(self, provider: ProviderConfig, request: LLMRequest):
+        # Standardize URL construction
+        base = provider.base_url.rstrip("/")
+        url = f"{base}/chat/completions"
+
+        headers = {
+            "Authorization": f"Bearer {provider.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        if provider.name == "openrouter":
+            headers["HTTP-Referer"] = "https://github.com/MaheshUmale/llm-quota-mem"
+            headers["X-Title"] = "llm-quota-mem"
+
+        payload = request.model_dump(exclude_none=True)
+        if not payload.get("model") or payload.get("model") == "default" or payload.get("model") not in provider.models:
+            payload["model"] = provider.models[0]
+
+        if provider.name == "google" and "openai" not in url:
+            url = f"{base}/openai/chat/completions"
+
+        logger.info(f"Streaming from {provider.name} | Model: {payload['model']}")
+
+        async with self.client.stream("POST", url, headers=headers, json=payload) as response:
+            if response.status_code != 200:
+                error_body = await response.aread()
+                logger.error(f"Streaming error from {provider.name}: {response.status_code} - {error_body.decode()}")
+                raise Exception(f"Provider {provider.name} failed with {response.status_code}")
+
+            async for line in response.aiter_lines():
+                if line.startswith("data: "):
+                    yield line
+
     async def _call_provider(self, provider: ProviderConfig, request: LLMRequest) -> Dict[str, Any]:
         # Standardize URL construction
         base = provider.base_url.rstrip("/")
@@ -250,7 +283,7 @@ class LLMRouter:
         healthy.sort(key=sort_key)
         return healthy
 
-    async def call(self, request: LLMRequest, domain: str = "general") -> str:
+    async def call(self, request: LLMRequest, domain: str = "general"):
         # Task Tiering
         complexity = self.scouter.scout(request.messages)
         logger.info(f"Task complexity scouted: {complexity}")
@@ -283,6 +316,10 @@ class LLMRouter:
         last_error = None
         for provider in providers:
             try:
+                if request.stream:
+                    # Return a generator for streaming
+                    return self._stream_provider(provider, request)
+
                 response_data = await self._call_provider(provider, request)
                 # Successful call: slowly reduce failure count to recover priority
                 if provider.failure_count > 0:
