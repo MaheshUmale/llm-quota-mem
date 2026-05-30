@@ -5,10 +5,10 @@
 ## Key Features
 
 - **Unified LLM Router**: Seamlessly switch between free tiers (Groq, SambaNova, Together, Gemini, OpenRouter, OpenAI, Cerebras, Mistral, GitHub, Cloudflare, NVIDIA) and **Local SLM Fallback** (Ollama/Llama.cpp) with intelligent failover.
-- **Task Complexity Routing**: Automatically scouts task complexity (SIMPLE, DEV, ARCH) to select the most cost-effective model/provider.
-- **Hybrid Memory & Knowledge Graph**: Combines semantic search (numpy-based) with a triple-store Knowledge Graph for complex EA relationship mapping.
-- **ECC Ecosystem Integration**: Harness-native hooks and skill manifests for **Everything Claude Code (ECC)**.
-- **80-90% Efficiency Gains**: Achieved via response caching, semantic compaction, and real-time token optimization.
+- **Task Complexity Routing**: Automatically scouts task complexity (SIMPLE, DEV, HEAVY) to select the most cost-effective model/provider.
+- **Cross-Session Hybrid Memory**: Seamlessly maintains context between sessions using semantic search and a Knowledge Graph, reducing redundant explanations and saving tokens.
+- **Persona & Skill System**: Easily swap between roles (Coder, Architect) and apply specialized instruction sets (Security, Concise) to optimize output quality and length.
+- **80-90% Efficiency Gains**: Achieved via intelligent routing, semantic compaction, and session memory hooks.
 - **Distilled Design**: Minimal dependencies (< 50MB footprint), high throughput, and async-native.
 
 ## Installation
@@ -91,22 +91,12 @@ To add a new LLM provider:
 
 `llm-quota-mem` is designed to work as the optimization engine for [ECC](https://github.com/affaan-m/ECC).
 
-### Native Hooks
-Integrate memory lifecycle into your agent harness:
-```python
-from llm_quota_mem.integrations.ecc.hooks import ECCHooks
+### API Hooks (Memory & Optimization)
+`llm-quota-mem` automatically manages memory and optimization via API hooks:
 
-hooks = ECCHooks(user_id="jules", project_id="arch_ai")
-
-# On Session Start (Automatic Recall)
-context = await hooks.on_session_start("How to migrate to microservices?")
-
-# On Session Stop (Save & Extract Instincts)
-await hooks.on_session_stop("We decided to use Kafka for decoupling.")
-```
-
-### EA Skills
-ECC-compatible `SKILL.md` manifests are available in `llm_quota_mem/integrations/ecc/skills/` for TOGAF, AWS, and C4 Model optimization.
+- **Pre-Hook (Recall)**: Automatically searches long-term memory for relevant context based on your query.
+- **Post-Hook (Storage)**: Saves the interaction to long-term memory for future recall.
+- **Token Optimization**: Use the `concise` skill to minimize output tokens without losing quality.
 
 ## Quick Start Guide
 

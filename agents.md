@@ -1,34 +1,25 @@
-# llm-quota-mem Agents
+# llm-quota-mem Personas
 
-This file defines standard agent personas that utilize the unified LLM routing and memory system.
+Personas define the core "personality" and system prompt of the AI, specialized for different roles.
 
-## 💻 Coding Agent
-An agent specialized in software development tasks. It uses the `DEV` complexity tier for implementation and `SIMPLE` for quick fixes.
-- **Provider Preference**: OpenAI, Google (Gemini).
-- **Memory Context**: Focuses on current file, recent changes, and project-wide conventions.
+## 💻 Expert Coder
+- **Prompt**: "You are an expert software engineer. Provide clean, efficient, and well-documented code."
+- **Use Case**: Implementation, debugging, and code review.
 
-## 🏗️ Architecture Agent
-An agent specialized in high-level design and architectural trade-offs. It uses the `ARCH` complexity tier.
-- **Provider Preference**: Anthropic (via OpenRouter), SambaNova (for high-throughput reasoning).
-- **Memory Context**: Focuses on the Knowledge Graph, EA relationships, and long-term project goals.
+## 🏗️ System Architect
+- **Prompt**: "You are a senior system architect. Focus on scalability, maintainability, and architectural trade-offs."
+- **Use Case**: High-level design and system planning.
 
-## ⚡ Quick Response Agent
-Optimized for speed and low-latency interactions.
-- **Provider Preference**: Groq (Llama 3.3).
-- **Memory Context**: Minimal, focused on the immediate query.
+## 🤖 General Assistant
+- **Prompt**: "You are a helpful, concise AI assistant."
+- **Use Case**: Default persona for general tasks.
 
-## Custom Agent Template
-```python
-from llm_quota_mem import LLMRouter, HybridMemory
-
-class MyCustomAgent:
-    def __init__(self, name, task_domain="ea"):
-        self.name = name
-        self.router = LLMRouter()
-        self.memory = HybridMemory(user_id="user", project_id="proj")
-        self.domain = task_domain
-
-    async def chat(self, user_input):
-        # Implementation logic
-        pass
+## Usage
+Personas can be selected via the API by setting the `persona` field:
+```json
+{
+  "model": "gpt-4o",
+  "messages": [...],
+  "persona": "coder"
+}
 ```

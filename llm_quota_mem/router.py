@@ -11,9 +11,9 @@ from .config import settings
 logger = logging.getLogger(__name__)
 
 class TaskComplexity(str, Enum):
-    SIMPLE = "simple"   # Pair programming, one-liners, tool execution (Haiku class)
-    DEV = "dev"         # Implementation, debugging, logic (Sonnet class)
-    ARCH = "arch"       # Complex architecture, reasoning, tradeoffs (Opus class)
+    SIMPLE = "simple"   # Quick responses, one-liners (fast models)
+    DEV = "dev"         # Implementation, logic (balanced models)
+    HEAVY = "heavy"     # Complex reasoning, long context (premium models)
 
 class Message(BaseModel):
     role: str
@@ -41,11 +41,11 @@ class ComplexityScouter:
     def scout(messages: List[Message]) -> TaskComplexity:
         full_text = " ".join([m.content.lower() for m in messages[-2:]])
 
-        arch_keywords = ["architecture", "tradeoff", "system design", "component diagram", "togaf", "c4"]
-        dev_keywords = ["implement", "write a", "fix", "debug", "test", "refactor"]
+        heavy_keywords = ["complex", "reasoning", "deep dive", "analyze", "summarize everything"]
+        dev_keywords = ["implement", "write a", "fix", "debug", "test", "refactor", "code"]
 
-        if any(kw in full_text for kw in arch_keywords):
-            return TaskComplexity.ARCH
+        if any(kw in full_text for kw in heavy_keywords) or len(full_text) > 2000:
+            return TaskComplexity.HEAVY
         if any(kw in full_text for kw in dev_keywords):
             return TaskComplexity.DEV
         return TaskComplexity.SIMPLE
@@ -188,7 +188,7 @@ class LLMRouter:
         response.raise_for_status()
         return response.json()
 
-    def _rank_providers(self, preferred_model: Optional[str] = None, domain: str = "ea") -> List[ProviderConfig]:
+    def _rank_providers(self, preferred_model: Optional[str] = None, domain: str = "general") -> List[ProviderConfig]:
         # Filter healthy providers and rank by priority
         now = time.time()
         healthy = []
@@ -207,10 +207,11 @@ class LLMRouter:
         # Sort by priority (lower is better)
         def sort_key(p: ProviderConfig):
             score = p.priority
-            # Domain-specific optimization: Groq/SambaNova/Cerebras are prioritized for EA due to speed/throughput
-            if domain == "ea" and p.name in ["groq", "sambanova", "cerebras"]:
+
+            # Prioritize fast providers for simple tasks
+            if domain == "fast" and p.name in ["groq", "cerebras", "sambanova"]:
                 score -= 5
-            elif domain == "coding" and p.name in ["openai", "google", "github"]:
+            elif domain == "coding" and p.name in ["github", "openai"]:
                 score -= 2
 
             # Use preferred model if it matches
@@ -222,15 +223,15 @@ class LLMRouter:
         healthy.sort(key=sort_key)
         return healthy
 
-    async def call(self, request: LLMRequest, domain: str = "ea") -> str:
-        # ECC-inspired Task Tiering
+    async def call(self, request: LLMRequest, domain: str = "general") -> str:
+        # Task Tiering
         complexity = self.scouter.scout(request.messages)
         logger.info(f"Task complexity scouted: {complexity}")
 
         # Override model if not specified based on complexity to save tokens/quota
         if not request.model:
             if complexity == TaskComplexity.SIMPLE:
-                request.model = "gpt-4o-mini" # or haiku if available
+                request.model = "gpt-4o-mini"
             elif complexity == TaskComplexity.DEV:
                 request.model = "llama-3.3-70b-versatile"
 

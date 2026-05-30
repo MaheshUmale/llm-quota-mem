@@ -90,25 +90,13 @@ class HybridMemory:
         self.graph = KnowledgeGraph(str(storage_dir / "graph"))
         self.embedder = Embedder()
 
-    async def add_memory(self, content: str, metadata: Optional[Dict[str, Any]] = None, extract_instincts: bool = False):
-        """Add a new semantic memory and optionally extract instincts for the graph."""
+    async def add_memory(self, content: str, metadata: Optional[Dict[str, Any]] = None):
+        """Add a new semantic memory."""
         vector = await self.embedder.embed_text(content)
         meta = metadata or {}
         meta["user_id"] = self.user_id
         meta["project_id"] = self.project_id
         await asyncio.to_thread(self.vector_store.add, content, vector, meta)
-
-        if extract_instincts:
-            await self._extract_instincts_to_graph(content)
-
-    async def _extract_instincts_to_graph(self, text: str):
-        """Simple rule-based instinct extraction (ECC 2.0 style)."""
-        # In a real app, this would use an SLM to extract entities/relations
-        # Placeholder: look for common EA patterns
-        patterns = ["kafka", "microservices", "kubernetes", "s3", "lambda", "rds"]
-        for p in patterns:
-            if p in text.lower():
-                self.graph.add_relation(self.project_id, "uses", p)
 
     async def recall(self, query: str = None, query_vector: List[float] = None, top_k: int = 5) -> Dict[str, Any]:
         """Recall relevant semantic memories and connected graph entities."""
