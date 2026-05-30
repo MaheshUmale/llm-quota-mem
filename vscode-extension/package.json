@@ -1,0 +1,83 @@
+{
+    "name": "llm-quota-mem-vscode",
+    "displayName": "LLM Quota Mem - Unified AI Agent",
+    "description": "Unified entry point for free LLM API quotas and intelligent agent memory.",
+    "version": "0.1.0",
+    "publisher": "maheshumale",
+    "engines": {
+        "vscode": "^1.80.0"
+    },
+    "categories": [
+        "Programming Languages",
+        "Machine Learning",
+        "AI"
+    ],
+    "activationEvents": [
+        "onView:llmQuotaMemSidebar"
+    ],
+    "main": "./dist/extension.js",
+    "contributes": {
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "llm-quota-mem-explorer",
+                    "title": "LLM Quota Mem",
+                    "icon": "media/icon.svg"
+                }
+            ]
+        },
+        "views": {
+            "llm-quota-mem-explorer": [
+                {
+                    "type": "webview",
+                    "id": "llmQuotaMemSidebar",
+                    "name": "AI Assistant"
+                }
+            ]
+        },
+        "commands": [
+            {
+                "command": "llm-quota-mem.startServer",
+                "title": "LLM Quota Mem: Start Unified Server"
+            },
+            {
+                "command": "llm-quota-mem.stopServer",
+                "title": "LLM Quota Mem: Stop Unified Server"
+            }
+        ],
+        "configuration": {
+            "title": "LLM Quota Mem",
+            "properties": {
+                "llmQuotaMem.pythonPath": {
+                    "type": "string",
+                    "default": "python",
+                    "description": "Path to the Python executable to run the gateway server."
+                },
+                "llmQuotaMem.serverPort": {
+                    "type": "number",
+                    "default": 8000,
+                    "description": "Port to run the unified gateway server on."
+                }
+            }
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "pretest": "npm run compile && npm run lint",
+        "lint": "eslint src --ext ts",
+        "test": "node ./out/test/runTest.js"
+    },
+    "devDependencies": {
+        "@types/vscode": "^1.80.0",
+        "@types/node": "16.x",
+        "@typescript-eslint/eslint-plugin": "^6.0.0",
+        "@typescript-eslint/parser": "^6.0.0",
+        "eslint": "^8.44.0",
+        "typescript": "^5.1.3"
+    },
+    "dependencies": {
+        "axios": "^1.4.0"
+    }
+}

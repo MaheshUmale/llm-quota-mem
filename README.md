@@ -13,6 +13,7 @@
 
 ## Installation
 
+### 1. Backend Gateway
 ```bash
 # Clone the repository
 git clone https://github.com/MaheshUmale/llm-quota-mem.git
@@ -21,6 +22,13 @@ cd llm-quota-mem
 # Install in editable mode
 pip install -e .
 ```
+
+### 2. VS Code Extension (Developer Mode)
+1.  Navigate to `vscode-extension/`.
+2.  Run `npm install`.
+3.  Open the `vscode-extension` folder in VS Code.
+4.  Press `F5` to launch the extension in a [Extension Development Host] window.
+5.  Find "LLM Quota Mem" in your Activity Bar (left sidebar).
 
 ## Setup
 
