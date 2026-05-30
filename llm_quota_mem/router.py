@@ -237,6 +237,9 @@ class LLMRouter:
 
         providers = self._rank_providers(request.model, domain=domain)
 
+        if not providers:
+            raise Exception("No providers are configured or healthy. Please add a provider via the dashboard or check your API keys.")
+
         last_error = None
         for provider in providers:
             try:

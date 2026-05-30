@@ -9,7 +9,7 @@ async def test_router_no_providers():
 
     with pytest.raises(Exception) as excinfo:
         await router.call(LLMRequest(messages=[Message(role="user", content="hi")]))
-    assert "All providers failed" in str(excinfo.value)
+    assert "No providers are configured" in str(excinfo.value)
     await router.close()
 
 def test_rank_providers():

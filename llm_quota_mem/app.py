@@ -291,17 +291,36 @@ async def dashboard():
                 box.innerHTML += '<p><span class="user">User:</span> ' + text + '</p>';
                 input.value = '';
 
-                const response = await fetch('/v1/chat/completions', {{
-                    method: 'POST',
-                    headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{
-                        model: 'default',
-                        messages: [{{ role: 'user', content: text }}]
-                    }})
-                }});
-                const data = await response.json();
-                const reply = data.choices[0].message.content;
-                box.innerHTML += '<p><span class="bot">Assistant:</span> ' + reply + '</p>';
+                const loadingId = 'loading-' + Date.now();
+                box.innerHTML += '<p id="' + loadingId + '"><em>Assistant is thinking...</em></p>';
+                box.scrollTop = box.scrollHeight;
+
+                try {{
+                    const response = await fetch('/v1/chat/completions', {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify({{
+                            model: 'default',
+                            messages: [{{ role: 'user', content: text }}]
+                        }})
+                    }});
+
+                    const loadingEl = document.getElementById(loadingId);
+                    if (loadingEl) loadingEl.remove();
+
+                    if (!response.ok) {{
+                        const errorData = await response.json();
+                        box.innerHTML += '<p style="color:red"><strong>Error:</strong> ' + (errorData.detail || 'Unknown error') + '</p>';
+                    }} else {{
+                        const data = await response.json();
+                        const reply = data.choices[0].message.content;
+                        box.innerHTML += '<p><span class="bot">Assistant:</span> ' + reply + '</p>';
+                    }}
+                }} catch (err) {{
+                    const loadingEl = document.getElementById(loadingId);
+                    if (loadingEl) loadingEl.remove();
+                    box.innerHTML += '<p style="color:red"><strong>Connection Error:</strong> ' + err.message + '</p>';
+                }}
                 box.scrollTop = box.scrollHeight;
             }}
         </script>
