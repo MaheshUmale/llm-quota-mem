@@ -35,6 +35,12 @@ if not exist ".env" (
     echo GOOGLE_API_KEY=
     echo OPENAI_API_KEY=
     echo OPENROUTER_API_KEY=
+    echo CEREBRAS_API_KEY=
+    echo MISTRAL_API_KEY=
+    echo GITHUB_API_KEY=
+    echo CLOUDFLARE_API_KEY=
+    echo CLOUDFLARE_ACCOUNT_ID=
+    echo NVIDIA_API_KEY=
     echo.
     echo # Optional Configurations
     echo DEFAULT_MODEL=gpt-4o-mini
