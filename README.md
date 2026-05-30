@@ -4,7 +4,7 @@
 
 ## Key Features
 
-- **Unified LLM Router**: Seamlessly switch between free tiers (Groq, SambaNova, Together, Gemini, OpenRouter, OpenAI) and **Local SLM Fallback** (Ollama/Llama.cpp) with intelligent failover.
+- **Unified LLM Router**: Seamlessly switch between free tiers (Groq, SambaNova, Together, Gemini, OpenRouter, OpenAI, Cerebras, Mistral, GitHub, Cloudflare, NVIDIA) and **Local SLM Fallback** (Ollama/Llama.cpp) with intelligent failover.
 - **Task Complexity Routing**: Automatically scouts task complexity (SIMPLE, DEV, ARCH) to select the most cost-effective model/provider.
 - **Hybrid Memory & Knowledge Graph**: Combines semantic search (numpy-based) with a triple-store Knowledge Graph for complex EA relationship mapping.
 - **ECC Ecosystem Integration**: Harness-native hooks and skill manifests for **Everything Claude Code (ECC)**.
@@ -33,10 +33,36 @@ SAMBANOVA_API_KEY=your_sambanova_key
 TOGETHER_API_KEY=your_together_key
 GOOGLE_API_KEY=your_google_key
 OPENAI_API_KEY=your_openai_key
+CEREBRAS_API_KEY=your_cerebras_key
+MISTRAL_API_KEY=your_mistral_key
+GITHUB_API_KEY=your_github_key
+CLOUDFLARE_API_KEY=your_cloudflare_key
+CLOUDFLARE_ACCOUNT_ID=your_cloudflare_account_id
+NVIDIA_API_KEY=your_nvidia_key
 
 # Optional Configurations
 DEFAULT_MODEL=gpt-4o-mini
 TEMPERATURE=0.7
+```
+
+## Pre-populating API Keys
+
+You can pre-populate API keys using a `keys.json` file in the root directory:
+
+```json
+[
+  {
+    "platform": "groq",
+    "api_key": "your_groq_key"
+  },
+  {
+    "platform": "cloudflare",
+    "api_key": "your_cloudflare_key",
+    "extra": {
+      "account_id": "your_account_id"
+    }
+  }
+]
 ```
 
 ## Adding New Providers

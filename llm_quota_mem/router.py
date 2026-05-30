@@ -113,6 +113,52 @@ class LLMRouter:
                 priority=6
             )
 
+        if settings.CEREBRAS_API_KEY:
+            providers["cerebras"] = ProviderConfig(
+                name="cerebras",
+                base_url=settings.CEREBRAS_BASE_URL,
+                api_key=settings.CEREBRAS_API_KEY,
+                models=["llama3.1-70b", "llama3.1-8b"],
+                priority=2 # High speed
+            )
+
+        if settings.MISTRAL_API_KEY:
+            providers["mistral"] = ProviderConfig(
+                name="mistral",
+                base_url=settings.MISTRAL_BASE_URL,
+                api_key=settings.MISTRAL_API_KEY,
+                models=["mistral-large-latest", "pixtral-12b-2409"],
+                priority=7
+            )
+
+        if settings.GITHUB_API_KEY:
+            providers["github"] = ProviderConfig(
+                name="github",
+                base_url=settings.GITHUB_BASE_URL,
+                api_key=settings.GITHUB_API_KEY,
+                models=["gpt-4o", "Phi-3.5-MoE-instruct"],
+                priority=8
+            )
+
+        if settings.CLOUDFLARE_API_KEY and settings.CLOUDFLARE_ACCOUNT_ID:
+            base_url = settings.CLOUDFLARE_BASE_URL.format(account_id=settings.CLOUDFLARE_ACCOUNT_ID)
+            providers["cloudflare"] = ProviderConfig(
+                name="cloudflare",
+                base_url=base_url,
+                api_key=settings.CLOUDFLARE_API_KEY,
+                models=["@cf/meta/llama-3.1-70b-instruct"],
+                priority=9
+            )
+
+        if settings.NVIDIA_API_KEY:
+            providers["nvidia"] = ProviderConfig(
+                name="nvidia",
+                base_url=settings.NVIDIA_BASE_URL,
+                api_key=settings.NVIDIA_API_KEY,
+                models=["nvidia/llama-3.1-405b-instruct"],
+                priority=5
+            )
+
         if settings.LOCAL_SLM_ENABLED:
             providers["local"] = ProviderConfig(
                 name="local",
@@ -161,10 +207,10 @@ class LLMRouter:
         # Sort by priority (lower is better)
         def sort_key(p: ProviderConfig):
             score = p.priority
-            # Domain-specific optimization: Groq/SambaNova are prioritized for EA due to speed/throughput
-            if domain == "ea" and p.name in ["groq", "sambanova"]:
+            # Domain-specific optimization: Groq/SambaNova/Cerebras are prioritized for EA due to speed/throughput
+            if domain == "ea" and p.name in ["groq", "sambanova", "cerebras"]:
                 score -= 5
-            elif domain == "coding" and p.name in ["openai", "google"]:
+            elif domain == "coding" and p.name in ["openai", "google", "github"]:
                 score -= 2
 
             # Use preferred model if it matches
