@@ -17,14 +17,14 @@ class ModelIntelligence(BaseModel):
 DEFAULT_INTELLIGENCE = [
     # Groq - Speed Kings
     ModelIntelligence(name="llama-3.3-70b-versatile", provider="groq", best_for=["reasoning", "general", "fast"], is_free=True, quota_info="1000 RPD, 100K TPD", priority=1),
-    ModelIntelligence(name="mixtral-8x7b-32768", provider="groq", best_for=["fast", "long-context"], is_free=True, quota_info="14400 RPD, 500K TPD", priority=2),
+    ModelIntelligence(name="llama-3.1-8b-instant", provider="groq", best_for=["fast"], is_free=True, quota_info="14400 RPD", priority=2),
 
     # SambaNova - High Throughput
-    ModelIntelligence(name="Meta-Llama-3.1-405B-Instruct", provider="sambanova", best_for=["complex-reasoning", "coding"], is_free=True, quota_info="200K TPD (Developer Tier)", priority=1),
-    ModelIntelligence(name="DeepSeek-V3.1", provider="sambanova", best_for=["coding", "reasoning"], is_free=True, quota_info="12000 RPD", priority=2),
+    ModelIntelligence(name="Meta-Llama-3.3-70B-Instruct", provider="sambanova", best_for=["complex-reasoning", "coding"], is_free=True, quota_info="200K TPD (Developer Tier)", priority=1),
+    ModelIntelligence(name="DeepSeek-R1", provider="sambanova", best_for=["reasoning"], is_free=True, quota_info="12000 RPD", priority=2),
 
     # Cerebras - Extreme Speed
-    ModelIntelligence(name="llama3.1-70b", provider="cerebras", best_for=["fast", "real-time"], is_free=True, quota_info="1M TPD", priority=1),
+    ModelIntelligence(name="llama-3.3-70b", provider="cerebras", best_for=["fast", "real-time"], is_free=True, quota_info="1M TPD", priority=1),
 
     # GitHub Models - Coding Focused
     ModelIntelligence(name="gpt-4o", provider="github", best_for=["coding", "architectural-design"], is_free=True, quota_info="8K TPM (Free)", priority=2),
