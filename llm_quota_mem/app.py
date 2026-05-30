@@ -1,5 +1,6 @@
 import os
 import time
+import asyncio
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException, Form
 from fastapi.responses import JSONResponse, HTMLResponse
@@ -8,6 +9,7 @@ from typing import List, Dict, Any, Optional, Union
 from llm_quota_mem.router import LLMRouter, LLMRequest, Message
 from llm_quota_mem.memory import HybridMemory
 from llm_quota_mem.personas import persona_manager
+from llm_quota_mem.intelligence import intelligence_manager
 from llm_quota_mem.config import settings
 import logging
 
@@ -23,6 +25,8 @@ router = LLMRouter()
 @app.on_event("startup")
 async def startup_event():
     logger.info("Starting llm-quota-mem Unified API server")
+    # Refresh intelligence data in the background
+    asyncio.create_task(intelligence_manager.refresh_intelligence())
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -194,10 +198,22 @@ async def dashboard():
     for name, p in router.providers.items():
         if p.api_key:
             status = "🟢 Active" if p.healthy else "🔴 Error"
+
+            # Add quota info from intelligence
+            quota_txt = "Unknown quota"
+            strengths = []
+            for m_intel in intelligence_manager.models.values():
+                if m_intel.provider == name:
+                    quota_txt = m_intel.quota_info
+                    strengths.extend(m_intel.best_for)
+            strengths = list(set(strengths))
+
             configured_html += f"""
             <div class='card'>
                 <strong>{name.upper()}</strong><br>
                 <span>Status: {status}</span><br>
+                <small>Quota: {quota_txt}</small><br>
+                <small>Best for: {", ".join(strengths)}</small><br>
                 <small>{p.base_url}</small>
             </div>"""
 
