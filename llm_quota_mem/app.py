@@ -1,8 +1,8 @@
 import os
 import time
 import uvicorn
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request, HTTPException, Form
+from fastapi.responses import JSONResponse, HTMLResponse
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional, Union
 from llm_quota_mem.router import LLMRouter, LLMRequest, Message
@@ -147,6 +147,153 @@ async def chat_completions(request: ChatCompletionRequest):
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "providers": {name: p.healthy for name, p in router.providers.items()}}
+
+@app.get("/", response_class=HTMLResponse)
+async def dashboard():
+    """Unified Dashboard UI."""
+    configured_html = ""
+    not_configured_html = ""
+
+    # Pre-defined list of supported platforms for the UI
+    supported = {
+        "groq": "https://api.groq.com/openai/v1",
+        "sambanova": "https://api.sambanova.ai/v1",
+        "together": "https://api.together.xyz/v1",
+        "google": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "openrouter": "https://openrouter.ai/api/v1",
+        "openai": "https://api.openai.com/v1",
+        "cerebras": "https://api.cerebras.ai/v1",
+        "mistral": "https://api.mistral.ai/v1",
+        "github": "https://models.inference.ai.azure.com",
+        "nvidia": "https://integrate.api.nvidia.com/v1",
+        "cloudflare": "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1"
+    }
+
+    for name, p in router.providers.items():
+        if p.api_key:
+            status = "🟢 Active" if p.healthy else "🔴 Error"
+            configured_html += f"""
+            <div class='card'>
+                <strong>{name.upper()}</strong><br>
+                <span>Status: {status}</span><br>
+                <small>{p.base_url}</small>
+            </div>"""
+
+    for name, url in supported.items():
+        if name not in router.providers or not router.providers[name].api_key:
+            not_configured_html += f"""
+            <div class='card disabled'>
+                <strong>{name.upper()}</strong><br>
+                <span>⚪ Not Configured</span><br>
+                <button onclick="openAdd('{name}', '{url}')">Configure</button>
+            </div>"""
+
+    html_content = f"""
+    <html>
+    <head>
+        <title>llm-quota-mem Dashboard</title>
+        <style>
+            body {{ font-family: sans-serif; background: #f4f7f6; color: #333; margin: 0; padding: 20px; }}
+            .container {{ max-width: 1000px; margin: auto; }}
+            .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }}
+            .card {{ background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+            .card.disabled {{ opacity: 0.7; border: 1px dashed #ccc; }}
+            .card strong {{ font-size: 1.2em; }}
+            .section {{ margin-bottom: 40px; }}
+            h2 {{ border-bottom: 2px solid #ddd; padding-bottom: 10px; }}
+            .modal {{ display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }}
+            .modal-content {{ background: #fff; margin: 10% auto; padding: 20px; border-radius: 8px; width: 400px; }}
+            input, select, button {{ width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; }}
+            button {{ background: #007bff; color: white; border: none; cursor: pointer; }}
+            button:hover {{ background: #0056b3; }}
+            #chat-box {{ background: #fff; padding: 20px; border-radius: 8px; height: 300px; overflow-y: scroll; border: 1px solid #ddd; }}
+            .user {{ color: blue; font-weight: bold; }}
+            .bot {{ color: green; font-weight: bold; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Unified LLM Dashboard</h1>
+
+            <div class="section">
+                <h2>Active Providers</h2>
+                <div class="grid">{configured_html}</div>
+            </div>
+
+            <div class="section">
+                <h2>Add / Configure Provider</h2>
+                <div class="grid">{not_configured_html}</div>
+            </div>
+
+            <div class="section">
+                <h2>Chat Test</h2>
+                <div id="chat-box"></div>
+                <input type="text" id="chat-input" placeholder="Type a message...">
+                <button onclick="sendChat()">Send</button>
+            </div>
+        </div>
+
+        <div id="addModal" class="modal">
+            <div class="modal-content">
+                <h2 id="modal-title">Configure Provider</h2>
+                <form action="/v1/providers" method="post">
+                    <input type="hidden" name="name" id="form-name">
+                    <label>Base URL</label>
+                    <input type="text" name="base_url" id="form-url">
+                    <label>API Key</label>
+                    <input type="password" name="api_key" placeholder="Enter API Key">
+                    <label>Models (comma separated)</label>
+                    <input type="text" name="models" value="gpt-4o-mini,llama3.3">
+                    <button type="submit">Save Provider</button>
+                    <button type="button" onclick="closeAdd()" style="background:#6c757d">Cancel</button>
+                </form>
+            </div>
+        </div>
+
+        <script>
+            function openAdd(name, url) {{
+                document.getElementById('addModal').style.display = 'block';
+                document.getElementById('modal-title').innerText = 'Configure ' + name.toUpperCase();
+                document.getElementById('form-name').value = name;
+                document.getElementById('form-url').value = url;
+            }}
+            function closeAdd() {{
+                document.getElementById('addModal').style.display = 'none';
+            }}
+            async function sendChat() {{
+                const input = document.getElementById('chat-input');
+                const box = document.getElementById('chat-box');
+                const text = input.value;
+                if(!text) return;
+
+                box.innerHTML += '<p><span class="user">User:</span> ' + text + '</p>';
+                input.value = '';
+
+                const response = await fetch('/v1/chat/completions', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{
+                        model: 'default',
+                        messages: [{{ role: 'user', content: text }}]
+                    }})
+                }});
+                const data = await response.json();
+                const reply = data.choices[0].message.content;
+                box.innerHTML += '<p><span class="bot">Assistant:</span> ' + reply + '</p>';
+                box.scrollTop = box.scrollHeight;
+            }}
+        </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+@app.post("/v1/providers")
+async def add_new_provider(name: str = Form(...), base_url: str = Form(...), api_key: str = Form(...), models: str = Form(...)):
+    """Add a new provider via the UI."""
+    model_list = [m.strip() for m in models.split(",")]
+    router.add_provider(name, base_url, api_key, model_list)
+    return HTMLResponse(content="<h2>Provider Added!</h2><a href='/'>Back to Dashboard</a>")
 
 def start():
     """Entry point for the application."""
