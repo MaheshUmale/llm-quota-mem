@@ -114,17 +114,10 @@ Verify your installation and start using the unified app in 3 steps:
    ```
 
 3. **VS Code Integration**:
+   - **Detailed Guide**: See [VSCODE_SETUP.md](VSCODE_SETUP.md) for full instructions.
    - Install the **Continue** extension in VS Code.
-   - Open Continue settings and add a new model:
-     ```json
-     {
-       "title": "llm-quota-mem",
-       "model": "gpt-4o",
-       "apiBase": "http://localhost:8000/v1",
-       "provider": "openai"
-     }
-     ```
-   - Now you can use the unified LLM for coding directly in VS Code!
+   - Open Continue settings and add a new model pointing to `http://localhost:8000/v1`.
+   - Use prefixes like `coder:gpt-4o` to switch personas directly from VS Code!
 
 ## Usage
 

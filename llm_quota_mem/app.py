@@ -62,6 +62,28 @@ async def list_models():
 async def chat_completions(request: ChatCompletionRequest):
     """OpenAI-compatible chat completions endpoint with Persona and Memory hooks."""
     try:
+        # Parse model name for persona and skills (e.g., "coder:python:concise:gpt-4o")
+        model_parts = request.model.split(":")
+        request_persona = request.persona
+        request_skills = request.skills or []
+        target_model = request.model
+
+        if len(model_parts) > 1:
+            # Check if first part is a persona
+            if persona_manager.get_persona(model_parts[0]):
+                request_persona = model_parts[0]
+                model_parts = model_parts[1:]
+
+            # Check for skills in subsequent parts
+            while len(model_parts) > 1:
+                if persona_manager.get_skill(model_parts[0]):
+                    request_skills.append(model_parts[0])
+                    model_parts = model_parts[1:]
+                else:
+                    break
+
+            target_model = model_parts[0]
+
         # 1. Initialize Memory for this session
         memory = HybridMemory(user_id=request.user_id, project_id=request.project_id)
 
@@ -75,11 +97,11 @@ async def chat_completions(request: ChatCompletionRequest):
 
         # 3. Apply Persona and Skills
         system_prompt = ""
-        p = persona_manager.get_persona(request.persona)
+        p = persona_manager.get_persona(request_persona)
         if p:
             system_prompt = p.system_prompt
 
-        for skill_name in request.skills:
+        for skill_name in request_skills:
             s = persona_manager.get_skill(skill_name)
             if s:
                 system_prompt += f"\n{s.instructions}"
@@ -99,7 +121,7 @@ async def chat_completions(request: ChatCompletionRequest):
         # 5. Create LLMRequest
         llm_request = LLMRequest(
             messages=final_messages,
-            model=request.model,
+            model=target_model if target_model != "default" else None,
             temperature=request.temperature or 0.7,
             max_tokens=request.max_tokens or 4096,
             stream=request.stream or False
@@ -107,7 +129,7 @@ async def chat_completions(request: ChatCompletionRequest):
 
         # Determine domain
         domain = "general"
-        if request.persona == "coder" or any(s in request.skills for s in ["python"]):
+        if request_persona == "coder" or any(s in request_skills for s in ["python"]):
             domain = "coding"
 
         # 6. Call router
