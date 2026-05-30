@@ -1,9 +1,10 @@
 import os
 import time
+import json
 import asyncio
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException, Form
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional, Union
 from llm_quota_mem.router import LLMRouter, LLMRequest, Message
@@ -137,7 +138,32 @@ async def chat_completions(request: ChatCompletionRequest):
             domain = "coding"
 
         # 6. Call router
-        content = await router.call(llm_request, domain=domain)
+        result = await router.call(llm_request, domain=domain)
+
+        # Handle Streaming Response
+        if request.stream:
+            async def stream_generator():
+                full_content = ""
+                async for chunk in result:
+                    yield f"{chunk}\n\n"
+                    # Try to extract content for memory
+                    try:
+                        data = json.loads(chunk.replace("data: ", ""))
+                        delta = data["choices"][0].get("delta", {})
+                        if "content" in delta:
+                            full_content += delta["content"]
+                    except:
+                        pass
+
+                # Post-hook for memory after stream ends
+                if request.use_memory and request.messages and full_content:
+                    user_msg = request.messages[-1]["content"]
+                    await memory.add_memory(f"User: {user_msg}\nAssistant: {full_content}")
+
+            return StreamingResponse(stream_generator(), media_type="text/event-stream")
+
+        # Handle Standard Response
+        content = result
 
         # 7. POST-HOOK: Memory Storage
         if request.use_memory and request.messages:
@@ -173,6 +199,44 @@ async def chat_completions(request: ChatCompletionRequest):
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "providers": {name: p.healthy for name, p in router.providers.items()}}
+
+# OpenAI-compatible embeddings endpoint
+class EmbeddingRequest(BaseModel):
+    input: Union[str, List[str]]
+    model: str
+    user: Optional[str] = None
+
+@app.post("/v1/embeddings")
+async def create_embeddings(request: EmbeddingRequest):
+    """OpenAI-compatible embeddings endpoint for project indexing."""
+    try:
+        from llm_quota_mem.embeddings import Embedder
+        embedder = Embedder()
+
+        inputs = [request.input] if isinstance(request.input, str) else request.input
+        data = []
+        for i, text in enumerate(inputs):
+            vector = await embedder.embed_text(text)
+            data.append({
+                "object": "embedding",
+                "index": i,
+                "embedding": vector
+            })
+
+        await embedder.close()
+
+        return {
+            "object": "list",
+            "data": data,
+            "model": request.model,
+            "usage": {
+                "prompt_tokens": -1,
+                "total_tokens": -1
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error in create_embeddings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
@@ -230,23 +294,29 @@ async def dashboard():
     <html>
     <head>
         <title>llm-quota-mem Dashboard</title>
+        <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
         <style>
-            body {{ font-family: sans-serif; background: #f4f7f6; color: #333; margin: 0; padding: 20px; }}
+            body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f7f6; color: #333; margin: 0; padding: 20px; }}
             .container {{ max-width: 1000px; margin: auto; }}
             .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }}
-            .card {{ background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-            .card.disabled {{ opacity: 0.7; border: 1px dashed #ccc; }}
-            .card strong {{ font-size: 1.2em; }}
+            .card {{ background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-top: 4px solid #007bff; }}
+            .card.disabled {{ opacity: 0.7; border: 1px dashed #ccc; border-top: none; }}
+            .card strong {{ font-size: 1.1em; color: #007bff; }}
             .section {{ margin-bottom: 40px; }}
-            h2 {{ border-bottom: 2px solid #ddd; padding-bottom: 10px; }}
+            h2 {{ border-bottom: 2px solid #ddd; padding-bottom: 10px; color: #444; }}
             .modal {{ display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }}
             .modal-content {{ background: #fff; margin: 10% auto; padding: 20px; border-radius: 8px; width: 400px; }}
-            input, select, button {{ width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; }}
-            button {{ background: #007bff; color: white; border: none; cursor: pointer; }}
+            input, select, button {{ width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }}
+            button {{ background: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; transition: background 0.3s; }}
             button:hover {{ background: #0056b3; }}
-            #chat-box {{ background: #fff; padding: 20px; border-radius: 8px; height: 300px; overflow-y: scroll; border: 1px solid #ddd; }}
-            .user {{ color: blue; font-weight: bold; }}
-            .bot {{ color: green; font-weight: bold; }}
+            #chat-box {{ background: #fff; padding: 20px; border-radius: 8px; height: 400px; overflow-y: scroll; border: 1px solid #ddd; display: flex; flex-direction: column; gap: 10px; }}
+            .msg {{ padding: 10px 15px; border-radius: 15px; max-width: 80%; line-height: 1.5; }}
+            .user {{ align-self: flex-end; background: #007bff; color: white; border-bottom-right-radius: 2px; }}
+            .bot {{ align-self: flex-start; background: #e9ecef; color: #333; border-bottom-left-radius: 2px; }}
+            .bot pre {{ background: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto; border: 1px solid #dee2e6; }}
+            .bot code {{ font-family: 'Courier New', Courier, monospace; color: #d63384; }}
+            .bot p {{ margin: 5px 0; }}
+            .loading {{ font-style: italic; color: #666; }}
         </style>
     </head>
     <body>
@@ -304,11 +374,11 @@ async def dashboard():
                 const text = input.value;
                 if(!text) return;
 
-                box.innerHTML += '<p><span class="user">User:</span> ' + text + '</p>';
+                box.innerHTML += '<div class="msg user">' + text + '</div>';
                 input.value = '';
 
                 const loadingId = 'loading-' + Date.now();
-                box.innerHTML += '<p id="' + loadingId + '"><em>Assistant is thinking...</em></p>';
+                box.innerHTML += '<div id="' + loadingId + '" class="loading msg bot">Assistant is thinking...</div>';
                 box.scrollTop = box.scrollHeight;
 
                 try {{
@@ -326,16 +396,18 @@ async def dashboard():
 
                     if (!response.ok) {{
                         const errorData = await response.json();
-                        box.innerHTML += '<p style="color:red"><strong>Error:</strong> ' + (errorData.detail || 'Unknown error') + '</p>';
+                        box.innerHTML += '<div class="msg bot" style="color:red"><strong>Error:</strong> ' + (errorData.detail || 'Unknown error') + '</div>';
                     }} else {{
                         const data = await response.json();
                         const reply = data.choices[0].message.content;
-                        box.innerHTML += '<p><span class="bot">Assistant:</span> ' + reply + '</p>';
+                        // Use marked.js for proper rendering
+                        const htmlReply = marked.parse(reply);
+                        box.innerHTML += '<div class="msg bot">' + htmlReply + '</div>';
                     }}
                 }} catch (err) {{
                     const loadingEl = document.getElementById(loadingId);
                     if (loadingEl) loadingEl.remove();
-                    box.innerHTML += '<p style="color:red"><strong>Connection Error:</strong> ' + err.message + '</p>';
+                    box.innerHTML += '<div class="msg bot" style="color:red"><strong>Connection Error:</strong> ' + err.message + '</div>';
                 }}
                 box.scrollTop = box.scrollHeight;
             }}

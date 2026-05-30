@@ -20,7 +20,18 @@ The server will start at `http://localhost:8000`. You can visit this URL in your
 
 ## Step 2: Configure VS Code Extensions
 
-### Option A: Using the "Continue" Extension (Recommended)
+### Option A: Using the "Roo Code" Extension (Highly Recommended for Agentic Coding)
+**Roo Code** (formerly Roo Cline) is an open-source autonomous agent that can use your local endpoint to perform multi-file tasks.
+
+1.  Install **Roo Code** from the VS Code Marketplace.
+2.  Open the Roo Code settings (gear icon in its sidebar).
+3.  Select **OpenAI Compatible** as the provider.
+4.  Set the **Base URL** to `http://localhost:8000/v1`.
+5.  Set the **API Key** to `any-string`.
+6.  Set the **Model ID** to `coder:python:concise:gpt-4o` (this triggers the Expert Coder persona, Python skill, and Concise output skill to save your tokens).
+7.  **Enable Context**: Roo Code will automatically analyze your current file and project structure!
+
+### Option B: Using the "Continue" Extension
 1.  Install the **Continue** extension from the VS Code Marketplace.
 2.  Click on the Continue icon in the sidebar.
 3.  Click the gear icon (Settings) to open `config.json`.
@@ -71,6 +82,11 @@ Visit `http://localhost:8000` to:
 1.  **Monitor Health**: See which LLM providers are currently active.
 2.  **Dynamic Configuration**: Add new API keys (Groq, Cerebras, etc.) without restarting the server.
 3.  **Chat Test**: Quickly verify your settings before using them in VS Code.
+
+### Important Configuration Tips
+- **Streaming**: Both Continue and Roo Code require streaming to feel responsive. `llm-quota-mem` supports this natively.
+- **Project Indexing**: In Continue, make sure to enable the `@Codebase` feature. It will use the `llm-quota-mem` memory to store and recall project-specific context, saving you from repeating yourself in every chat.
+- **Persona Prefixes**: Always use prefixes in your model settings (e.g., `coder:mixtral-8x7b`) to ensure the agent has the right instructions for the task.
 
 ---
 

@@ -57,27 +57,16 @@ class SimpleVectorStore:
         # Cosine similarity
         norms = np.linalg.norm(self.vectors, axis=1)
         q_norm = np.linalg.norm(query_vec)
+        denom = (norms * q_norm)
         if q_norm == 0:
             # If query is zero-vector, check if we have any zero-vector memories (common in tests)
             similarities = np.zeros(len(self.metadata))
             for idx, vec in enumerate(self.vectors):
                 if np.linalg.norm(vec) == 0:
                     similarities[idx] = 1.0
-        elif np.any(norms == 0):
-            # Partial zero vectors, use standard formula but handle division by zero
-            denom = (norms * q_norm)
-            similarities = np.dot(self.vectors, query_vec) / np.where(denom == 0, 1.0, denom)
         else:
-            similarities = np.dot(self.vectors, query_vec) / (norms * q_norm)
-
-        denom = (norms * q_norm)
-        # Handle zero vectors in denominator
-        similarities = np.dot(self.vectors, query_vec) / np.where(denom == 0, 1.0, denom)
-        # If both are zero vectors, dot is 0, but we want it to be 1 for exact match in tests
-        if q_norm == 0:
-            for idx, vec in enumerate(self.vectors):
-                if np.linalg.norm(vec) == 0:
-                    similarities[idx] = 1.0
+            # Handle zero vectors in denominator for non-zero query
+            similarities = np.dot(self.vectors, query_vec) / np.where(denom == 0, 1.0, denom)
 
         # Apply time-based decay
         now = time.time()

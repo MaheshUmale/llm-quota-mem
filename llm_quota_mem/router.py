@@ -171,23 +171,82 @@ class LLMRouter:
 
         return providers
 
-    async def _call_provider(self, provider: ProviderConfig, request: LLMRequest) -> Dict[str, Any]:
-        url = f"{provider.base_url}/chat/completions"
+    async def _stream_provider(self, provider: ProviderConfig, request: LLMRequest):
+        # Standardize URL construction
+        base = provider.base_url.rstrip("/")
+        url = f"{base}/chat/completions"
+
         headers = {
             "Authorization": f"Bearer {provider.api_key}",
             "Content-Type": "application/json"
         }
 
-        # Use default model if not specified
+        if provider.name == "openrouter":
+            headers["HTTP-Referer"] = "https://github.com/MaheshUmale/llm-quota-mem"
+            headers["X-Title"] = "llm-quota-mem"
+
         payload = request.model_dump(exclude_none=True)
-        if not payload.get("model"):
+        if not payload.get("model") or payload.get("model") == "default" or payload.get("model") not in provider.models:
             payload["model"] = provider.models[0]
 
-        logger.debug(f"Calling {provider.name} with model {payload['model']}")
+        if provider.name == "google" and "openai" not in url:
+            url = f"{base}/openai/chat/completions"
 
-        response = await self.client.post(url, headers=headers, json=payload)
-        response.raise_for_status()
-        return response.json()
+        logger.info(f"Streaming from {provider.name} | Model: {payload['model']}")
+
+        async with self.client.stream("POST", url, headers=headers, json=payload) as response:
+            if response.status_code != 200:
+                error_body = await response.aread()
+                logger.error(f"Streaming error from {provider.name}: {response.status_code} - {error_body.decode()}")
+                raise Exception(f"Provider {provider.name} failed with {response.status_code}")
+
+            async for line in response.aiter_lines():
+                if line.startswith("data: "):
+                    yield line
+
+    async def _call_provider(self, provider: ProviderConfig, request: LLMRequest) -> Dict[str, Any]:
+        # Standardize URL construction
+        base = provider.base_url.rstrip("/")
+        url = f"{base}/chat/completions"
+
+        headers = {
+            "Authorization": f"Bearer {provider.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        # Aggregator-specific headers
+        if provider.name == "openrouter":
+            headers["HTTP-Referer"] = "https://github.com/MaheshUmale/llm-quota-mem"
+            headers["X-Title"] = "llm-quota-mem"
+
+        # Prepare payload
+        payload = request.model_dump(exclude_none=True)
+
+        # Model fallback logic
+        requested_model = payload.get("model")
+        if not requested_model or requested_model == "default" or requested_model not in provider.models:
+            payload["model"] = provider.models[0]
+
+        # Google Gemini compatibility: versioning and structure
+        if provider.name == "google":
+            # Google OpenAI-compatible endpoint is /v1beta/openai/chat/completions
+            if "openai" not in url:
+                url = f"{base}/openai/chat/completions"
+
+        logger.info(f"Routing to {provider.name} | URL: {url} | Model: {payload['model']} (Requested: {requested_model})")
+
+        try:
+            response = await self.client.post(url, headers=headers, json=payload)
+            if response.status_code != 200:
+                logger.error(f"Provider {provider.name} error: {response.status_code} - {response.text}")
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            # Re-raise to be caught by the call() loop
+            raise e
+        except Exception as e:
+            logger.error(f"Unexpected error calling {provider.name}: {str(e)}")
+            raise e
 
     def _rank_providers(self, preferred_model: Optional[str] = None, domain: str = "general") -> List[ProviderConfig]:
         # Filter healthy providers and rank by priority
@@ -224,7 +283,7 @@ class LLMRouter:
         healthy.sort(key=sort_key)
         return healthy
 
-    async def call(self, request: LLMRequest, domain: str = "general") -> str:
+    async def call(self, request: LLMRequest, domain: str = "general"):
         # Task Tiering
         complexity = self.scouter.scout(request.messages)
         logger.info(f"Task complexity scouted: {complexity}")
@@ -257,6 +316,10 @@ class LLMRouter:
         last_error = None
         for provider in providers:
             try:
+                if request.stream:
+                    # Return a generator for streaming
+                    return self._stream_provider(provider, request)
+
                 response_data = await self._call_provider(provider, request)
                 # Successful call: slowly reduce failure count to recover priority
                 if provider.failure_count > 0:
