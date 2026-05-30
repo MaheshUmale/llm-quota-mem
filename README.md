@@ -5,7 +5,7 @@
 ## Key Features
 
 - **Unified LLM Router**: Seamlessly switch between free tiers (Groq, SambaNova, Together, Gemini, OpenRouter, OpenAI, Cerebras, Mistral, GitHub, Cloudflare, NVIDIA) and **Local SLM Fallback** (Ollama/Llama.cpp) with intelligent failover.
-- **Task Complexity Routing**: Automatically scouts task complexity (SIMPLE, DEV, HEAVY) to select the most cost-effective model/provider.
+- **Intelligent Task-Aware Routing**: Automatically detects task type (Coding, Reasoning, Fast) and routes to the best-performing and most cost-effective free-tier model.
 - **Cross-Session Hybrid Memory**: Seamlessly maintains context between sessions using semantic search and a Knowledge Graph, reducing redundant explanations and saving tokens.
 - **Persona & Skill System**: Easily swap between roles (Coder, Architect) and apply specialized instruction sets (Security, Concise) to optimize output quality and length.
 - **80-90% Efficiency Gains**: Achieved via intelligent routing, semantic compaction, and session memory hooks.
@@ -87,9 +87,10 @@ To add a new LLM provider:
         )
     ```
 
-## ECC Integration
+## Core Features
 
-`llm-quota-mem` is designed to work as the optimization engine for [ECC](https://github.com/affaan-m/ECC).
+### Management Dashboard
+Manage your LLM ecosystem from a simple browser interface at `http://localhost:8000/`. Monitor health, see provider quotas, and test chat completions.
 
 ### API Hooks (Memory & Optimization)
 `llm-quota-mem` automatically manages memory and optimization via API hooks:
@@ -158,21 +159,10 @@ print(context)
 ## Advanced Features
 
 ### Semantic Compaction
-When context is reaching limits, use `semantic_compress` to summarize threads before truncation:
-```python
-from llm_quota_mem.utils import semantic_compress
-summary = await semantic_compress(messages, router)
-```
+When context is reaching limits, use `semantic_compress` to summarize threads before truncation to stay within model context windows and save tokens.
 
-### Knowledge Graph & Instinct Learning
-Automated extraction of architectural relations:
-```python
-# Save to memory and automatically extract triples for the graph
-await memory.add_memory("System uses Kubernetes and S3", extract_instincts=True)
-
-# Query connections
-rels = memory.graph.query("arch_ai")
-```
+### Hybrid Memory
+Maintains semantic context across sessions using a lightweight vector store and a knowledge graph.
 
 ### Benchmarking
 Run the built-in benchmarking suite to track performance and token savings:
