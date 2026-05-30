@@ -266,5 +266,16 @@ class LLMRouter:
 
         raise Exception(f"All providers failed. Last error: {last_error}")
 
+    def add_provider(self, name: str, base_url: str, api_key: str, models: List[str], priority: int = 10):
+        """Dynamically add or update a provider."""
+        self.providers[name.lower()] = ProviderConfig(
+            name=name.lower(),
+            base_url=base_url,
+            api_key=api_key,
+            models=models,
+            priority=priority
+        )
+        logger.info(f"Provider {name} added/updated via UI.")
+
     async def close(self):
         await self.client.aclose()
