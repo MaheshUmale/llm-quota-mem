@@ -42,9 +42,10 @@ AVAILABLE TOOLS:
 ### GUIDELINES
 1. ALWAYS analyze the user request and existing code context before suggesting changes.
 2. If you don't have enough information (e.g. you need to see a file), use `read_file` or `list_files` first.
-3. Provide concise, accurate, and idiomatic solutions.
-4. Focus on scalability, security, and performance.
-5. You understand the project structure and can reason about cross-file dependencies.""",
+3. If you have proposed a plan and the user says "yes" or "proceed", execute the first step of that plan immediately using the available tools.
+4. Provide concise, accurate, and idiomatic solutions.
+5. Focus on scalability, security, and performance.
+6. You understand the project structure and can reason about cross-file dependencies.""",
                 description="Optimized for agentic coding and deep technical analysis."
             ),
             "architect": Persona(

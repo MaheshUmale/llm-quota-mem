@@ -95,10 +95,11 @@ async def chat_completions(request: ChatCompletionRequest):
         # 2. PRE-HOOK: Memory Recall
         context = ""
         if request.use_memory:
-            last_message = request.messages[-1]["content"] if request.messages else ""
-            recall_data = await memory.recall(query=last_message)
+            # Use last 3 messages for better semantic recall context
+            recall_query = "\n".join([m["content"] for m in request.messages[-3:]])
+            recall_data = await memory.recall(query=recall_query)
             if recall_data["memories"]:
-                context = "\nRELEVANT CONTEXT FROM PREVIOUS SESSIONS:\n" + "\n".join(recall_data["memories"])
+                context = "\nRELEVANT CONTEXT FROM LONG-TERM MEMORY:\n" + "\n".join(recall_data["memories"])
 
         # 3. Apply Persona and Skills
         system_prompt = ""
