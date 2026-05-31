@@ -195,14 +195,37 @@ class SidebarProvider implements vscode.WebviewViewProvider {
         try {
             switch (tool) {
                 case 'list_files': {
-                    const dirPath = path.join(workspaceRoot, params.path || "");
-                    const files = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dirPath));
-                    return files.map(([name, type]) => `${name} (${type === vscode.FileType.Directory ? 'Dir' : 'File'})`).join("\n");
+                    const targetDir = path.join(workspaceRoot, params.directory || "");
+                    const maxDepth = params.depth || 3;
+
+                    const listRecursive = async (dir: string, depth: number): Promise<string[]> => {
+                        if (depth <= 0) return [];
+                        const entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
+                        let result: string[] = [];
+                        for (const [name, type] of entries) {
+                            const relPath = path.relative(workspaceRoot, path.join(dir, name));
+                            result.push(`${relPath} (${type === vscode.FileType.Directory ? 'Dir' : 'File'})`);
+                            if (type === vscode.FileType.Directory) {
+                                const sub = await listRecursive(path.join(dir, name), depth - 1);
+                                result = result.concat(sub);
+                            }
+                        }
+                        return result;
+                    };
+
+                    const allFiles = await listRecursive(targetDir, maxDepth);
+                    return allFiles.join("\n");
                 }
                 case 'read_file': {
                     const filePath = path.join(workspaceRoot, params.path);
                     const doc = await vscode.workspace.openTextDocument(filePath);
-                    return doc.getText();
+                    let content = doc.getText();
+
+                    if (params.start_line !== undefined && params.end_line !== undefined) {
+                        const lines = content.split("\n");
+                        content = lines.slice(params.start_line - 1, params.end_line).join("\n");
+                    }
+                    return content;
                 }
                 case 'write_file': {
                     const filePath = path.join(workspaceRoot, params.path);
@@ -210,9 +233,69 @@ class SidebarProvider implements vscode.WebviewViewProvider {
                     await vscode.workspace.fs.writeFile(vscode.Uri.file(filePath), content);
                     return `Successfully wrote to ${params.path}`;
                 }
+                case 'patch_file': {
+                    const filePath = path.join(workspaceRoot, params.path);
+                    const doc = await vscode.workspace.openTextDocument(filePath);
+                    const text = doc.getText();
+
+                    if (!text.includes(params.search)) {
+                        return `Error: Could not find exact search block in ${params.path}`;
+                    }
+
+                    const newText = text.replace(params.search, params.replace);
+                    const edit = new vscode.WorkspaceEdit();
+                    edit.replace(doc.uri, new vscode.Range(new vscode.Position(0, 0), doc.lineAt(doc.lineCount - 1).range.end), newText);
+                    await vscode.workspace.applyEdit(edit);
+                    await doc.save();
+                    return `Successfully patched ${params.path}`;
+                }
                 case 'search_code': {
-                    const results = await vscode.commands.executeCommand('vscode.executeWorkspaceSymbolProvider', params.query);
-                    return JSON.stringify(results);
+                    // Use ripgrep-like search via VS Code API
+                    const pattern = params.pattern || params.query;
+                    const results = await vscode.workspace.findFiles(params.file_pattern || '**/*', '**/node_modules/**');
+                    let output = "";
+                    for (const file of results.slice(0, 50)) {
+                        const doc = await vscode.workspace.openTextDocument(file);
+                        const content = doc.getText();
+                        if (content.includes(pattern)) {
+                            output += `Found in ${vscode.workspace.asRelativePath(file)}\n`;
+                        }
+                    }
+                    return output || "No matches found.";
+                }
+                case 'execute_command': {
+                    return new Promise((resolve) => {
+                        const child = spawn(params.command, {
+                            shell: true,
+                            cwd: workspaceRoot,
+                            env: { ...process.env }
+                        });
+
+                        let stdout = "";
+                        let stderr = "";
+
+                        child.stdout?.on('data', (data) => stdout += data);
+                        child.stderr?.on('data', (data) => stderr += data);
+
+                        const timeout = setTimeout(() => {
+                            child.kill();
+                            resolve(`Command timed out after ${params.timeout_seconds || 30}s\nStdout: ${stdout}\nStderr: ${stderr}`);
+                        }, (params.timeout_seconds || 30) * 1000);
+
+                        child.on('close', (code) => {
+                            clearTimeout(timeout);
+                            resolve(`Exit Code: ${code}\nStdout: ${stdout}\nStderr: ${stderr}`);
+                        });
+                    });
+                }
+                case 'view_outline': {
+                    const filePath = path.join(workspaceRoot, params.path);
+                    const symbols = await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
+                        'vscode.executeDocumentSymbolProvider',
+                        vscode.Uri.file(filePath)
+                    );
+                    if (!symbols) return "No symbols found or file type not supported.";
+                    return symbols.map(s => `${s.name} [${vscode.SymbolKind[s.kind]}]`).join("\n");
                 }
                 default:
                     return `Unknown tool: ${tool}`;
