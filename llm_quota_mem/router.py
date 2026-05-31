@@ -45,7 +45,7 @@ class ProviderConfig(BaseModel):
 class ComplexityScouter:
     @staticmethod
     def scout(messages: List[Message]) -> TaskComplexity:
-        full_text = " ".join([m.content.lower() for m in messages[-2:]])
+        full_text = " ".join([m.content.lower() for m in messages[-2:] if m.content])
 
         reasoning_keywords = ["complex", "reasoning", "deep dive", "analyze", "summarize everything", "architecture", "system design", "tradeoff"]
         coding_keywords = ["implement", "write a", "fix", "debug", "test", "refactor", "code", "python", "javascript", "script"]
