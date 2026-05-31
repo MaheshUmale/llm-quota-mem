@@ -32,7 +32,12 @@ The server will start at `http://localhost:8000`. You can visit this URL in your
 7.  **Enable Context**: Roo Code will automatically analyze your current file and project structure!
 
 ### Option B: Using the Native "LLM Quota Mem" Extension
-We provide a dedicated VS Code extension that manages the gateway server for you and provides a native chat sidebar.
+We provide a dedicated VS Code extension that manages the gateway server for you and provides a native chat sidebar. **This extension now acts as a full Coding Agent with access to your workspace!**
+
+#### 🚀 Features
+- **File Access**: The agent can list, read, and search files in your open project.
+- **Auto-Editing**: If you use the `Expert Coder` persona, the agent can automatically write or update files for you.
+- **Context Aware**: Automatically includes the content of your currently open file in every chat.
 
 #### 📦 Installation (Recommended)
 1.  Download the `llm-quota-mem.vsix` file from the `vscode-extension/` directory.

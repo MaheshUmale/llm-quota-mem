@@ -95,26 +95,106 @@ class SidebarProvider implements vscode.WebviewViewProvider {
         webviewView.webview.onDidReceiveMessage(async (data) => {
             switch (data.type) {
                 case 'sendMessage': {
-                    try {
-                        const port = vscode.workspace.getConfiguration("llmQuotaMem").get<number>("serverPort") || 8000;
-                        const response = await axios.post(`http://localhost:${port}/v1/chat/completions`, {
-                            model: data.model || "coder:gpt-4o",
-                            messages: [{ role: "user", content: data.text }],
-                            user_id: vscode.env.machineId,
-                            project_id: vscode.workspace.name || "default"
-                        });
-
-                        webviewView.webview.postMessage({
-                            type: 'addResponse',
-                            value: response.data.choices[0].message.content
-                        });
-                    } catch (err: any) {
-                        vscode.window.showErrorMessage(`Gateway Error: ${err.message}`);
-                    }
+                    await this._handleMessage(webviewView, data.text, data.model);
                     break;
                 }
             }
         });
+    }
+
+    private async _handleMessage(webviewView: vscode.WebviewView, text: string, model?: string) {
+        try {
+            const port = vscode.workspace.getConfiguration("llmQuotaMem").get<number>("serverPort") || 8000;
+            let messages = [{ role: "user", content: text }];
+
+            // Add Initial Context (Current File)
+            const activeEditor = vscode.window.activeTextEditor;
+            if (activeEditor) {
+                const fileName = activeEditor.document.fileName;
+                const content = activeEditor.document.getText();
+                messages.unshift({
+                    role: "system",
+                    content: `CURRENT FILE CONTEXT:\nFile: ${fileName}\n\nContent:\n${content}`
+                });
+            }
+
+            let loop = true;
+            let currentMessages = [...messages];
+
+            while (loop) {
+                const response = await axios.post(`http://localhost:${port}/v1/chat/completions`, {
+                    model: model || "coder:gpt-4o",
+                    messages: currentMessages,
+                    user_id: vscode.env.machineId,
+                    project_id: vscode.workspace.name || "default"
+                });
+
+                const assistantMsg = response.data.choices[0].message.content;
+
+                // Parse for tool use
+                const toolMatch = assistantMsg.match(/<tool_use>([\s\S]*?)<\/tool_use>/);
+
+                if (toolMatch) {
+                    try {
+                        const toolCall = JSON.parse(toolMatch[1].trim());
+                        webviewView.webview.postMessage({ type: 'status', value: `Executing ${toolCall.tool}...` });
+
+                        const result = await this._executeTool(toolCall.tool, toolCall.parameters);
+
+                        currentMessages.push({ role: "assistant", content: assistantMsg });
+                        currentMessages.push({ role: "user", content: `TOOL_RESULT: ${result}` });
+
+                        // Continue loop to let model see tool result
+                        continue;
+                    } catch (e: any) {
+                        webviewView.webview.postMessage({ type: 'addResponse', value: assistantMsg + `\n\n[Error parsing tool: ${e.message}]` });
+                        loop = false;
+                    }
+                } else {
+                    webviewView.webview.postMessage({
+                        type: 'addResponse',
+                        value: assistantMsg
+                    });
+                    loop = false;
+                }
+            }
+        } catch (err: any) {
+            vscode.window.showErrorMessage(`Gateway Error: ${err.message}`);
+        }
+    }
+
+    private async _executeTool(tool: string, params: any): Promise<string> {
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
+        if (!workspaceRoot) return "Error: No workspace open";
+
+        try {
+            switch (tool) {
+                case 'list_files': {
+                    const dirPath = path.join(workspaceRoot, params.path || "");
+                    const files = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dirPath));
+                    return files.map(([name, type]) => `${name} (${type === vscode.FileType.Directory ? 'Dir' : 'File'})`).join("\n");
+                }
+                case 'read_file': {
+                    const filePath = path.join(workspaceRoot, params.path);
+                    const doc = await vscode.workspace.openTextDocument(filePath);
+                    return doc.getText();
+                }
+                case 'write_file': {
+                    const filePath = path.join(workspaceRoot, params.path);
+                    const content = Buffer.from(params.content, 'utf8');
+                    await vscode.workspace.fs.writeFile(vscode.Uri.file(filePath), content);
+                    return `Successfully wrote to ${params.path}`;
+                }
+                case 'search_code': {
+                    const results = await vscode.commands.executeCommand('vscode.executeWorkspaceSymbolProvider', params.query);
+                    return JSON.stringify(results);
+                }
+                default:
+                    return `Unknown tool: ${tool}`;
+            }
+        } catch (e: any) {
+            return `Error executing tool: ${e.message}`;
+        }
     }
 
     private _getHtmlForWebview(webview: vscode.Webview) {

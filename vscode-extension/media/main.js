@@ -19,7 +19,12 @@
         const message = event.data;
         switch (message.type) {
             case 'addResponse': {
+                removeStatus();
                 addMessage('bot', message.value);
+                break;
+            }
+            case 'status': {
+                showStatus(message.value);
                 break;
             }
         }
@@ -28,13 +33,32 @@
     function sendMessage() {
         const text = promptInput.value;
         if (text) {
+            removeStatus();
             addMessage('user', text);
             vscode.postMessage({
                 type: 'sendMessage',
                 text: text
             });
             promptInput.value = '';
+            showStatus('Thinking...');
         }
+    }
+
+    function showStatus(text) {
+        let status = document.getElementById('status-msg');
+        if (!status) {
+            status = document.createElement('div');
+            status.id = 'status-msg';
+            status.className = 'message bot status';
+            responseContainer.appendChild(status);
+        }
+        status.innerText = text;
+        responseContainer.scrollTop = responseContainer.scrollHeight;
+    }
+
+    function removeStatus() {
+        const status = document.getElementById('status-msg');
+        if (status) status.remove();
     }
 
     function addMessage(role, text) {
