@@ -3,7 +3,7 @@ import httpx
 import logging
 import json
 import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from enum import Enum
 from pydantic import BaseModel, Field
 from .config import settings
@@ -26,6 +26,8 @@ class LLMRequest(BaseModel):
     temperature: float = settings.TEMPERATURE
     max_tokens: int = settings.MAX_TOKENS
     stream: bool = False
+    tools: Optional[List[Dict[str, Any]]] = None
+    tool_choice: Optional[Union[str, Dict[str, Any]]] = None
 
 class ProviderConfig(BaseModel):
     name: str

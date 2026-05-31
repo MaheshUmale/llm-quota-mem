@@ -41,6 +41,8 @@ class ChatCompletionRequest(BaseModel):
     temperature: Optional[float] = 0.7
     max_tokens: Optional[int] = 4096
     stream: Optional[bool] = False
+    tools: Optional[List[Dict[str, Any]]] = None
+    tool_choice: Optional[Union[str, Dict[str, Any]]] = None
     # Custom Extensions
     persona: Optional[str] = "general"
     skills: Optional[List[str]] = []
@@ -137,7 +139,9 @@ async def chat_completions(request: ChatCompletionRequest):
             model=target_model if target_model != "default" else None,
             temperature=request.temperature or 0.7,
             max_tokens=request.max_tokens or 4096,
-            stream=request.stream or False
+            stream=request.stream or False,
+            tools=request.tools,
+            tool_choice=request.tool_choice
         )
 
         # Determine domain
