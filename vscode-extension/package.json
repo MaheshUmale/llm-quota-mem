@@ -15,7 +15,7 @@
     "activationEvents": [
         "onView:llmQuotaMemSidebar"
     ],
-    "main": "./dist/extension.js",
+    "main": "./out/extension.js",
     "contributes": {
         "viewsContainers": {
             "activitybar": [

@@ -145,3 +145,8 @@ cython_debug/
 # LLM Quota Mem specific
 .llm_cache/
 .llm_memory/
+
+# VS Code Extension
+vscode-extension/node_modules
+vscode-extension/out
+vscode-extension/*.vsix
