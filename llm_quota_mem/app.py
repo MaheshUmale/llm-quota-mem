@@ -99,7 +99,7 @@ async def chat_completions(request: ChatCompletionRequest):
         context = ""
         if request.use_memory:
             # Use last 3 messages for better semantic recall context
-            recall_query = "\n".join([m["content"] for m in request.messages[-3:]])
+            recall_query = "\n".join([m.get("content", "") for m in request.messages[-3:] if m.get("content")])
             recall_data = await memory.recall(query=recall_query)
             if recall_data["memories"]:
                 context = "\nRELEVANT CONTEXT FROM LONG-TERM MEMORY:\n" + "\n".join(recall_data["memories"])
@@ -120,7 +120,7 @@ async def chat_completions(request: ChatCompletionRequest):
 
         # 4. Prepare Messages
         final_messages = []
-        client_system_prompts = [m["content"] for m in request.messages if m["role"] == "system"]
+        client_system_prompts = [m.get("content", "") for m in request.messages if m.get("role") == "system" and m.get("content")]
 
         # Merge Persona System Prompt with Client System Prompt (File context, etc.)
         combined_system = system_prompt
@@ -131,8 +131,14 @@ async def chat_completions(request: ChatCompletionRequest):
             final_messages.append(Message(role="system", content=combined_system))
 
         for m in request.messages:
-            if m["role"] != "system":
-                final_messages.append(Message(role=m["role"], content=m["content"]))
+            if m.get("role") != "system":
+                final_messages.append(Message(
+                    role=m.get("role"),
+                    content=m.get("content"),
+                    tool_calls=m.get("tool_calls"),
+                    tool_call_id=m.get("tool_call_id"),
+                    name=m.get("name")
+                ))
 
         # 5. Create LLMRequest
         llm_request = LLMRequest(
