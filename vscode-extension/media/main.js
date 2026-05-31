@@ -31,6 +31,15 @@
                 responseContainer.innerHTML = '';
                 break;
             }
+            case 'restoreHistory': {
+                responseContainer.innerHTML = '';
+                message.value.forEach(m => {
+                    if (m.role === 'user') addMessage('user', m.content);
+                    if (m.role === 'assistant' && m.content) addMessage('bot', m.content);
+                    // Optionally show tool results/calls if needed, but keeping it clean for now
+                });
+                break;
+            }
         }
     });
 

@@ -102,12 +102,19 @@ class SidebarProvider implements vscode.WebviewViewProvider {
     ) {
         this._view = webviewView;
 
+        webviewView.description = "AI Assistant";
+
         webviewView.webview.options = {
             enableScripts: true,
             localResourceRoots: [this._extensionUri]
         };
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+
+        // Restore history if it exists
+        if (this._history.length > 0) {
+            webviewView.webview.postMessage({ type: 'restoreHistory', value: this._history });
+        }
 
         webviewView.webview.onDidReceiveMessage(async (data) => {
             switch (data.type) {
@@ -171,7 +178,8 @@ class SidebarProvider implements vscode.WebviewViewProvider {
 
                 // 1. Handle Native Tool Calls
                 if (toolCalls && toolCalls.length > 0) {
-                    currentMessages.push(msg); // Push assistant message with tool calls
+                    currentMessages.push(msg);
+                    this._history.push(msg); // Keep in history for state persistence
 
                     for (const toolCall of toolCalls) {
                         const functionName = toolCall.function.name;
@@ -180,12 +188,14 @@ class SidebarProvider implements vscode.WebviewViewProvider {
                         webviewView.webview.postMessage({ type: 'status', value: `Running tool: ${functionName}...` });
                         const result = await this._executeTool(functionName, args);
 
-                        currentMessages.push({
+                        const toolMsg = {
                             role: "tool",
                             tool_call_id: toolCall.id,
                             name: functionName,
                             content: result
-                        });
+                        };
+                        currentMessages.push(toolMsg);
+                        this._history.push(toolMsg); // Keep in history for state persistence
                     }
                     continue;
                 }
@@ -204,8 +214,14 @@ class SidebarProvider implements vscode.WebviewViewProvider {
 
                         const result = await this._executeTool(toolName, toolParams);
 
-                        currentMessages.push({ role: "assistant", content: assistantMsg });
-                        currentMessages.push({ role: "user", content: `TOOL_RESULT: ${result}` });
+                        const fallbackAssistant = { role: "assistant", content: assistantMsg };
+                        const fallbackToolResult = { role: "user", content: `TOOL_RESULT: ${result}` };
+
+                        currentMessages.push(fallbackAssistant);
+                        this._history.push(fallbackAssistant);
+
+                        currentMessages.push(fallbackToolResult);
+                        this._history.push(fallbackToolResult);
 
                         continue;
                     } catch (e: any) {
