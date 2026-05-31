@@ -27,6 +27,10 @@
                 showStatus(message.value);
                 break;
             }
+            case 'clearChat': {
+                responseContainer.innerHTML = '';
+                break;
+            }
         }
     });
 

@@ -24,6 +24,10 @@ export function activate(context: vscode.ExtensionContext) {
         stopGatewayServer();
     }));
 
+    context.subscriptions.push(vscode.commands.registerCommand('llm-quota-mem.clearChat', () => {
+        provider.clearHistory();
+    }));
+
     // Auto-start server if enabled (default true logic)
     startGatewayServer();
 }
@@ -78,13 +82,26 @@ function stopGatewayServer() {
 }
 
 class SidebarProvider implements vscode.WebviewViewProvider {
+    private _history: { role: string, content: string }[] = [];
+    private _view?: vscode.WebviewView;
+
     constructor(private readonly _extensionUri: vscode.Uri) {}
+
+    public clearHistory() {
+        this._history = [];
+        if (this._view) {
+            this._view.webview.postMessage({ type: 'clearChat' });
+        }
+        vscode.window.showInformationMessage("Chat history cleared.");
+    }
 
     public resolveWebviewView(
         webviewView: vscode.WebviewView,
         context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken,
     ) {
+        this._view = webviewView;
+
         webviewView.webview.options = {
             enableScripts: true,
             localResourceRoots: [this._extensionUri]
@@ -105,21 +122,26 @@ class SidebarProvider implements vscode.WebviewViewProvider {
     private async _handleMessage(webviewView: vscode.WebviewView, text: string, model?: string) {
         try {
             const port = vscode.workspace.getConfiguration("llmQuotaMem").get<number>("serverPort") || 8000;
-            let messages = [{ role: "user", content: text }];
 
-            // Add Initial Context (Current File)
+            // Add Initial Context (Current File) - Fresh for each message
+            let systemContext = "";
             const activeEditor = vscode.window.activeTextEditor;
             if (activeEditor) {
                 const fileName = activeEditor.document.fileName;
                 const content = activeEditor.document.getText();
-                messages.unshift({
-                    role: "system",
-                    content: `CURRENT FILE CONTEXT:\nFile: ${fileName}\n\nContent:\n${content}`
-                });
+                systemContext = `CURRENT FILE CONTEXT:\nFile: ${fileName}\n\nContent:\n${content}`;
             }
 
+            // Append user message to history
+            this._history.push({ role: "user", content: text });
+
             let loop = true;
-            let currentMessages = [...messages];
+            // Build current messages: System Context + History
+            let currentMessages: any[] = [];
+            if (systemContext) {
+                currentMessages.push({ role: "system", content: systemContext });
+            }
+            currentMessages = currentMessages.concat(this._history);
 
             while (loop) {
                 const response = await axios.post(`http://localhost:${port}/v1/chat/completions`, {
@@ -151,6 +173,9 @@ class SidebarProvider implements vscode.WebviewViewProvider {
                         loop = false;
                     }
                 } else {
+                    // Final response from assistant: Add to history
+                    this._history.push({ role: "assistant", content: assistantMsg });
+
                     webviewView.webview.postMessage({
                         type: 'addResponse',
                         value: assistantMsg
