@@ -32,8 +32,16 @@ The server will start at `http://localhost:8000`. You can visit this URL in your
 7.  **Enable Context**: Roo Code will automatically analyze your current file and project structure!
 
 ### Option B: Using the Native "LLM Quota Mem" Extension
-We now provide a dedicated VS Code extension that manages the gateway server for you and provides a native chat sidebar.
+We provide a dedicated VS Code extension that manages the gateway server for you and provides a native chat sidebar.
 
+#### 📦 Installation (Recommended)
+1.  Download the `llm-quota-mem.vsix` file from the `vscode-extension/` directory.
+2.  In VS Code, go to the Extensions view (`Ctrl+Shift+X`).
+3.  Click the "..." (Views and More Actions) at the top right.
+4.  Select **Install from VSIX...**
+5.  Select the `llm-quota-mem.vsix` file.
+
+#### 🛠️ Manual Setup (For Developers)
 1.  Navigate to the `vscode-extension` folder in the repository.
 2.  Run `npm install` and `npm run compile`.
 3.  Open the folder in VS Code and press `F5` to start a development instance.
