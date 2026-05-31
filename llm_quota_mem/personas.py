@@ -40,6 +40,9 @@ AVAILABLE TOOLS:
 - write_file: Create a new file or completely overwrite an existing one.
 - patch_file: Make precise surgical edits using search-and-replace blocks.
 - execute_command: Run terminal commands (tests, linters) in a sandbox.
+- grep_search: High-speed regex search across files.
+- get_process_info: Check if specific scripts or servers are running.
+- get_file_info: Check file metadata (size, mod time).
 
 ### OPERATIONAL GUIDELINES
 1. Analyze First: Never jump straight into writing code. Thoroughly explore the repository using list_files and read_file.

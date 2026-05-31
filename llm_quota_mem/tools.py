@@ -159,5 +159,63 @@ def get_coder_tools() -> List[Dict[str, Any]]:
                     "required": ["path"]
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "grep_search",
+                "description": "Fast text search using regex across the project (similar to grep).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "pattern": {
+                            "type": "string",
+                            "description": "The regex pattern to search for."
+                        },
+                        "include": {
+                            "type": "string",
+                            "description": "Glob pattern for files to include."
+                        },
+                        "case_sensitive": {
+                            "type": "boolean",
+                            "default": False
+                        }
+                    },
+                    "required": ["pattern"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_process_info",
+                "description": "List running processes related to the project (checks if server/scripts are running).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "filter": {
+                            "type": "string",
+                            "description": "Optional string to filter process names."
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_file_info",
+                "description": "Get detailed file information like size, permissions, and last modified time.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "The path to the file."
+                        }
+                    },
+                    "required": ["path"]
+                }
+            }
         }
     ]
