@@ -3,7 +3,7 @@ import httpx
 import logging
 import json
 import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from enum import Enum
 from pydantic import BaseModel, Field
 from .config import settings
@@ -18,7 +18,10 @@ class TaskComplexity(str, Enum):
 
 class Message(BaseModel):
     role: str
-    content: str
+    content: Optional[str] = None
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+    tool_call_id: Optional[str] = None
+    name: Optional[str] = None
 
 class LLMRequest(BaseModel):
     messages: List[Message]
@@ -26,6 +29,8 @@ class LLMRequest(BaseModel):
     temperature: float = settings.TEMPERATURE
     max_tokens: int = settings.MAX_TOKENS
     stream: bool = False
+    tools: Optional[List[Dict[str, Any]]] = None
+    tool_choice: Optional[Union[str, Dict[str, Any]]] = None
 
 class ProviderConfig(BaseModel):
     name: str
@@ -227,6 +232,14 @@ class LLMRouter:
         if not requested_model or requested_model == "default" or requested_model not in provider.models:
             payload["model"] = provider.models[0]
 
+        # Provider-specific tweaks for tools
+        if provider.name in ["groq", "sambanova", "together", "cerebras"]:
+            # Some free providers are picky about empty tool lists
+            if "tools" in payload and not payload["tools"]:
+                del payload["tools"]
+            if "tool_choice" in payload and not payload["tools"]:
+                del payload["tool_choice"]
+
         # Google Gemini compatibility: versioning and structure
         if provider.name == "google":
             # Google OpenAI-compatible endpoint is /v1beta/openai/chat/completions
@@ -324,7 +337,11 @@ class LLMRouter:
                 # Successful call: slowly reduce failure count to recover priority
                 if provider.failure_count > 0:
                     provider.failure_count -= 1
-                return response_data["choices"][0]["message"]["content"]
+
+                msg = response_data["choices"][0]["message"]
+                if "tool_calls" in msg and msg["tool_calls"]:
+                    return msg # Return the full message object if it has tool calls
+                return msg["content"]
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 429:
                     logger.warning(f"Rate limit hit for {provider.name}. Backing off.")

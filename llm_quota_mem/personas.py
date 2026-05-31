@@ -1,3 +1,4 @@
+import os
 from typing import Dict, List, Optional
 from pydantic import BaseModel
 
@@ -24,16 +25,21 @@ class PersonaManager:
                 system_prompt="""You are an elite Staff Software Engineer and a highly autonomous Coding Agent. Your primary goal is to help the user build, debug, and refactor software within their project. You are pragmatic, meticulous, and obsessed with clean code, scalability, and security.
 
 ### WORKSPACE TOOLS
-You have access to a suite of tools to interact with the project workspace. To use a tool, output a JSON block wrapped in <tool_use> tags.
+You have access to a suite of tools to interact with the project workspace.
+
+**IMPORTANT: TOOL USE FORMATTING**
+1. **NATIVE TOOLS**: If the environment supports function calling, use it.
+2. **FALLBACK TAGS**: If you cannot use native tools, output a JSON block wrapped in <tool_use> tags.
+   Example: <tool_use>{"tool": "list_files", "parameters": {"directory": "."}}</tool_use>
 
 AVAILABLE TOOLS:
-- list_files: Recursively list files in the project. Params: { "directory": "...", "depth": 3 }
-- view_outline: Extract symbols (classes, methods) from a file. Params: { "path": "..." }
-- read_file: Read file content. Supports range-based reading. Params: { "path": "...", "start_line": 1, "end_line": 100 }
-- search_code: Fast regex search across the entire repository. Params: { "pattern": "...", "file_pattern": "*.py" }
-- write_file: Create a new file or completely overwrite an existing one. Params: { "path": "...", "content": "..." }
-- patch_file: Make precise surgical edits using search-and-replace blocks. Params: { "path": "...", "search": "old code", "replace": "new code" }
-- execute_command: Run terminal commands (tests, linters) in a sandbox. Params: { "command": "...", "timeout_seconds": 30 }
+- list_files: Recursively list files in the project.
+- view_outline: Extract symbols (classes, methods) from a file.
+- read_file: Read file content. Supports range-based reading.
+- search_code: Fast regex search across the entire repository.
+- write_file: Create a new file or completely overwrite an existing one.
+- patch_file: Make precise surgical edits using search-and-replace blocks.
+- execute_command: Run terminal commands (tests, linters) in a sandbox.
 
 ### OPERATIONAL GUIDELINES
 1. Analyze First: Never jump straight into writing code. Thoroughly explore the repository using list_files and read_file.
@@ -76,6 +82,38 @@ AVAILABLE TOOLS:
                 description="Reduces token usage by minimizing verbosity."
             )
         }
+        self._load_from_files()
+
+    def _load_from_files(self):
+        # Load from agents.md if exists
+        if os.path.exists("agents.md"):
+            try:
+                with open("agents.md", "r") as f:
+                    content = f.read()
+                    # Basic parser for agents.md (could be more robust)
+                    if "## Expert Coder" in content:
+                        coder_prompt = content.split("## Expert Coder")[1].split("##")[0].strip()
+                        if "Prompt" in coder_prompt:
+                            actual_prompt = coder_prompt.split("Prompt**:")[1].split("\n")[0].strip().strip('"')
+                            # Update existing coder persona with extra flavor but keep tool instructions
+                            self.personas["coder"].system_prompt = f"{actual_prompt}\n\n{self.personas['coder'].system_prompt}"
+            except Exception as e:
+                print(f"Error loading agents.md: {e}")
+
+        # Load from Skills.md if exists
+        if os.path.exists("Skills.md"):
+            # Similar logic for Skills.md could be added here
+            pass
+
+        # Load from PERSONA.md (Custom global rules)
+        if os.path.exists("PERSONA.md"):
+            try:
+                with open("PERSONA.md", "r") as f:
+                    rules = f.read()
+                    for p in self.personas.values():
+                        p.system_prompt += f"\n\n### GLOBAL PROJECT RULES (from PERSONA.md):\n{rules}"
+            except Exception as e:
+                print(f"Error loading PERSONA.md: {e}")
 
     def get_persona(self, name: str) -> Optional[Persona]:
         return self.personas.get(name.lower())
