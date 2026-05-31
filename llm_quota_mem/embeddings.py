@@ -1,21 +1,48 @@
 import httpx
 import logging
-from typing import List, Optional
+import asyncio
+import hashlib
+from typing import List, Optional, Dict
 from .config import settings
 
 logger = logging.getLogger(__name__)
+
+# Simple in-memory cache for embeddings to avoid 429s on repeat strings
+_EMBEDDING_CACHE: Dict[str, List[float]] = {}
 
 class Embedder:
     def __init__(self):
         self.client = httpx.AsyncClient(timeout=30.0)
 
     async def embed_text(self, text: str) -> List[float]:
-        # Priority: OpenAI > Google > Groq (if supported)
+        # Check cache first
+        cache_key = hashlib.md5(text.encode()).hexdigest()
+        if cache_key in _EMBEDDING_CACHE:
+            return _EMBEDDING_CACHE[cache_key]
+
+        # Priority: OpenAI > Google
         vector = None
+
+        # Try providers with retry logic
+        providers = []
         if settings.OPENAI_API_KEY:
-            vector = await self._embed_openai(text)
-        elif settings.GOOGLE_API_KEY:
-            vector = await self._embed_google(text)
+            providers.append(("openai", self._embed_openai))
+        if settings.GOOGLE_API_KEY:
+            providers.append(("google", self._embed_google))
+
+        for name, func in providers:
+            try:
+                vector = await func(text)
+                if vector:
+                    break
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    logger.warning(f"Embedding provider {name} rate limited (429). Trying next...")
+                    continue
+                logger.error(f"Embedding provider {name} error: {e}")
+            except Exception as e:
+                logger.error(f"Unexpected error with embedding provider {name}: {e}")
+                continue
 
         if vector:
             # Ensure consistent 1536 dimensions
@@ -23,6 +50,9 @@ class Embedder:
                 vector = vector + [0.0] * (1536 - len(vector))
             elif len(vector) > 1536:
                 vector = vector[:1536]
+
+            # Cache result
+            _EMBEDDING_CACHE[cache_key] = vector
             return vector
 
         # Fallback to a zero-vector if no provider is available (to not crash)
