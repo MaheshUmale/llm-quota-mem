@@ -121,6 +121,7 @@ class SidebarProvider implements vscode.WebviewViewProvider {
 
     private async _handleMessage(webviewView: vscode.WebviewView, text: string, model?: string) {
         try {
+            webviewView.webview.postMessage({ type: 'status', value: 'Initializing context...' });
             const port = vscode.workspace.getConfiguration("llmQuotaMem").get<number>("serverPort") || 8000;
 
             // Add Initial Context (Current File & Workspace Tree)
@@ -156,6 +157,7 @@ class SidebarProvider implements vscode.WebviewViewProvider {
             currentMessages = currentMessages.concat(this._history);
 
             while (loop) {
+                webviewView.webview.postMessage({ type: 'status', value: 'Thinking...' });
                 const response = await axios.post(`http://localhost:${port}/v1/chat/completions`, {
                     model: model || "coder:gpt-4o",
                     messages: currentMessages,
@@ -175,7 +177,7 @@ class SidebarProvider implements vscode.WebviewViewProvider {
                         const functionName = toolCall.function.name;
                         const args = JSON.parse(toolCall.function.arguments);
 
-                        webviewView.webview.postMessage({ type: 'status', value: `Executing ${functionName}...` });
+                        webviewView.webview.postMessage({ type: 'status', value: `Running tool: ${functionName}...` });
                         const result = await this._executeTool(functionName, args);
 
                         currentMessages.push({
@@ -198,7 +200,7 @@ class SidebarProvider implements vscode.WebviewViewProvider {
                         const toolName = toolCall.tool || toolCall.name || toolCall.function;
                         const toolParams = toolCall.parameters || toolCall.arguments || toolCall.params || {};
 
-                        webviewView.webview.postMessage({ type: 'status', value: `Executing ${toolName}...` });
+                        webviewView.webview.postMessage({ type: 'status', value: `Running tool: ${toolName}...` });
 
                         const result = await this._executeTool(toolName, toolParams);
 
