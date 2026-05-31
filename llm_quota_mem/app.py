@@ -10,6 +10,7 @@ from typing import List, Dict, Any, Optional, Union
 from llm_quota_mem.router import LLMRouter, LLMRequest, Message
 from llm_quota_mem.memory import HybridMemory
 from llm_quota_mem.personas import persona_manager
+from llm_quota_mem.tools import get_coder_tools
 from llm_quota_mem.intelligence import intelligence_manager
 from llm_quota_mem.config import settings
 import logging
@@ -37,10 +38,12 @@ async def shutdown_event():
 # OpenAI-compatible models
 class ChatCompletionRequest(BaseModel):
     model: str
-    messages: List[Dict[str, str]]
+    messages: List[Dict[str, Any]]
     temperature: Optional[float] = 0.7
     max_tokens: Optional[int] = 4096
     stream: Optional[bool] = False
+    tools: Optional[List[Dict[str, Any]]] = None
+    tool_choice: Optional[Union[str, Dict[str, Any]]] = None
     # Custom Extensions
     persona: Optional[str] = "general"
     skills: Optional[List[str]] = []
@@ -137,8 +140,14 @@ async def chat_completions(request: ChatCompletionRequest):
             model=target_model if target_model != "default" else None,
             temperature=request.temperature or 0.7,
             max_tokens=request.max_tokens or 4096,
-            stream=request.stream or False
+            stream=request.stream or False,
+            tools=request.tools,
+            tool_choice=request.tool_choice
         )
+
+        # Auto-inject tools if persona is coder and no tools provided
+        if request_persona == "coder" and not llm_request.tools:
+            llm_request.tools = get_coder_tools()
 
         # Determine domain
         domain = "general"
@@ -171,14 +180,33 @@ async def chat_completions(request: ChatCompletionRequest):
             return StreamingResponse(stream_generator(), media_type="text/event-stream")
 
         # Handle Standard Response
-        content = result
+        # result can be a string (content) or a full choice object if it has tool calls
+        content = ""
+        tool_calls = None
+
+        if isinstance(result, str):
+            content = result
+        elif isinstance(result, dict):
+            # This shouldn't happen with current router implementation but being safe
+            content = result.get("content", "")
+            tool_calls = result.get("tool_calls")
+
+        # Check if the router returned content that is actually a full response object
+        # (Router needs update to return full message object for tool calls)
 
         # 7. POST-HOOK: Memory Storage
         if request.use_memory and request.messages:
-            user_msg = request.messages[-1]["content"]
+            user_msg = request.messages[-1].get("content", "")
             await memory.add_memory(f"User: {user_msg}\nAssistant: {content}")
 
         # 8. Format response as OpenAI-compatible
+        response_message = {
+            "role": "assistant",
+            "content": content
+        }
+        if tool_calls:
+            response_message["tool_calls"] = tool_calls
+
         return {
             "id": f"chatcmpl-{os.urandom(12).hex()}",
             "object": "chat.completion",
@@ -187,11 +215,8 @@ async def chat_completions(request: ChatCompletionRequest):
             "choices": [
                 {
                     "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": content
-                    },
-                    "finish_reason": "stop"
+                    "message": response_message,
+                    "finish_reason": "tool_calls" if tool_calls else "stop"
                 }
             ],
             "usage": {

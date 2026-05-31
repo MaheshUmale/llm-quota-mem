@@ -123,13 +123,25 @@ class SidebarProvider implements vscode.WebviewViewProvider {
         try {
             const port = vscode.workspace.getConfiguration("llmQuotaMem").get<number>("serverPort") || 8000;
 
-            // Add Initial Context (Current File) - Fresh for each message
+            // Add Initial Context (Current File & Workspace Tree)
             let systemContext = "";
             const activeEditor = vscode.window.activeTextEditor;
             if (activeEditor) {
                 const fileName = activeEditor.document.fileName;
                 const content = activeEditor.document.getText();
-                systemContext = `CURRENT FILE CONTEXT:\nFile: ${fileName}\n\nContent:\n${content}`;
+                systemContext = `CURRENT FILE CONTEXT:\nFile: ${fileName}\n\nContent:\n${content}\n\n`;
+            }
+
+            // Add workspace structure if it's the beginning of the conversation
+            if (this._history.length === 0) {
+                const workspaceRoot = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
+                if (workspaceRoot) {
+                    try {
+                        const entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(workspaceRoot));
+                        const tree = entries.map(([name, type]) => `- ${name} (${type === vscode.FileType.Directory ? 'Dir' : 'File'})`).join("\n");
+                        systemContext += `WORKSPACE STRUCTURE:\n${tree}\n`;
+                    } catch (e) {}
+                }
             }
 
             // Append user message to history
@@ -151,22 +163,48 @@ class SidebarProvider implements vscode.WebviewViewProvider {
                     project_id: vscode.workspace.name || "default"
                 });
 
-                const assistantMsg = response.data.choices[0].message.content;
+                const msg = response.data.choices[0].message;
+                const assistantMsg = msg.content || "";
+                const toolCalls = msg.tool_calls;
 
-                // Parse for tool use
+                // 1. Handle Native Tool Calls
+                if (toolCalls && toolCalls.length > 0) {
+                    currentMessages.push(msg); // Push assistant message with tool calls
+
+                    for (const toolCall of toolCalls) {
+                        const functionName = toolCall.function.name;
+                        const args = JSON.parse(toolCall.function.arguments);
+
+                        webviewView.webview.postMessage({ type: 'status', value: `Executing ${functionName}...` });
+                        const result = await this._executeTool(functionName, args);
+
+                        currentMessages.push({
+                            role: "tool",
+                            tool_call_id: toolCall.id,
+                            name: functionName,
+                            content: result
+                        });
+                    }
+                    continue;
+                }
+
+                // 2. Handle Fallback Tag Parsing
                 const toolMatch = assistantMsg.match(/<tool_use>([\s\S]*?)<\/tool_use>/);
 
                 if (toolMatch) {
                     try {
                         const toolCall = JSON.parse(toolMatch[1].trim());
-                        webviewView.webview.postMessage({ type: 'status', value: `Executing ${toolCall.tool}...` });
+                        // Normalize format if it's {"tool": "...", "parameters": {...}} or just {"name": "...", "args": {...}}
+                        const toolName = toolCall.tool || toolCall.name || toolCall.function;
+                        const toolParams = toolCall.parameters || toolCall.arguments || toolCall.params || {};
 
-                        const result = await this._executeTool(toolCall.tool, toolCall.parameters);
+                        webviewView.webview.postMessage({ type: 'status', value: `Executing ${toolName}...` });
+
+                        const result = await this._executeTool(toolName, toolParams);
 
                         currentMessages.push({ role: "assistant", content: assistantMsg });
                         currentMessages.push({ role: "user", content: `TOOL_RESULT: ${result}` });
 
-                        // Continue loop to let model see tool result
                         continue;
                     } catch (e: any) {
                         webviewView.webview.postMessage({ type: 'addResponse', value: assistantMsg + `\n\n[Error parsing tool: ${e.message}]` });
@@ -238,16 +276,41 @@ class SidebarProvider implements vscode.WebviewViewProvider {
                     const doc = await vscode.workspace.openTextDocument(filePath);
                     const text = doc.getText();
 
-                    if (!text.includes(params.search)) {
-                        return `Error: Could not find exact search block in ${params.path}`;
+                    // Fuzzy matching or multiple attempts
+                    let searchBlock = params.search;
+                    let replaceBlock = params.replace;
+
+                    if (!text.includes(searchBlock)) {
+                        // Try trimming whitespace from each line
+                        const trimLines = (s: string) => s.split('\n').map(l => l.trim()).join('\n');
+                        const textTrimmed = trimLines(text);
+                        const searchTrimmed = trimLines(searchBlock);
+
+                        if (textTrimmed.includes(searchTrimmed)) {
+                             // This is a bit risky but better than failing immediately
+                             // For a "perfect" agent we should ideally use a proper diff library
+                             return `Error: Exact match not found, but similar block exists. Please provide exact character-for-character match including indentation.`;
+                        }
+                        return `Error: Could not find exact search block in ${params.path}. Make sure indentation and whitespace match exactly.`;
                     }
 
-                    const newText = text.replace(params.search, params.replace);
+                    const newText = text.replace(searchBlock, replaceBlock);
                     const edit = new vscode.WorkspaceEdit();
-                    edit.replace(doc.uri, new vscode.Range(new vscode.Position(0, 0), doc.lineAt(doc.lineCount - 1).range.end), newText);
-                    await vscode.workspace.applyEdit(edit);
-                    await doc.save();
-                    return `Successfully patched ${params.path}`;
+
+                    // Replace entire content to be safe with line endings and ranges
+                    const fullRange = new vscode.Range(
+                        doc.positionAt(0),
+                        doc.positionAt(text.length)
+                    );
+
+                    edit.replace(doc.uri, fullRange, newText);
+                    const success = await vscode.workspace.applyEdit(edit);
+                    if (success) {
+                        await doc.save();
+                        return `Successfully patched ${params.path}`;
+                    } else {
+                        return `Error: Failed to apply edit to ${params.path}`;
+                    }
                 }
                 case 'search_code': {
                     // Use ripgrep-like search via VS Code API
