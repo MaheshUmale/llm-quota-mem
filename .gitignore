@@ -149,4 +149,5 @@ cython_debug/
 # VS Code Extension
 vscode-extension/node_modules
 vscode-extension/out
-vscode-extension/*.vsix
+# Keep the VSIX for easy local installation as requested
+!vscode-extension/llm-quota-mem.vsix

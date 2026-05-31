@@ -19,16 +19,20 @@
 git clone https://github.com/MaheshUmale/llm-quota-mem.git
 cd llm-quota-mem
 
-# Install in editable mode
+# Install in editable mode (Linux/macOS)
 pip install -e .
+
+# Or use the automated setup for Windows
+setup.bat
 ```
 
-### 2. VS Code Extension (Developer Mode)
-1.  Navigate to `vscode-extension/`.
-2.  Run `npm install`.
-3.  Open the `vscode-extension` folder in VS Code.
-4.  Press `F5` to launch the extension in a [Extension Development Host] window.
-5.  Find "LLM Quota Mem" in your Activity Bar (left sidebar).
+### 2. VS Code Extension
+The easiest way is to install the pre-packaged extension:
+1.  In VS Code, go to **Extensions** (`Ctrl+Shift+X`).
+2.  Click the **...** menu and select **Install from VSIX...**.
+3.  Choose `vscode-extension/llm-quota-mem.vsix` from this repository.
+
+For developer mode, see [VSCODE_SETUP.md](VSCODE_SETUP.md).
 
 ## Setup
 
