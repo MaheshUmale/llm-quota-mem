@@ -35,6 +35,15 @@
                 }
             ]
         },
+        "menus": {
+            "view/title": [
+                {
+                    "command": "llm-quota-mem.clearChat",
+                    "when": "view == llmQuotaMemSidebar",
+                    "group": "navigation"
+                }
+            ]
+        },
         "commands": [
             {
                 "command": "llm-quota-mem.startServer",
@@ -43,6 +52,11 @@
             {
                 "command": "llm-quota-mem.stopServer",
                 "title": "LLM Quota Mem: Stop Unified Server"
+            },
+            {
+                "command": "llm-quota-mem.clearChat",
+                "title": "LLM Quota Mem: Clear Chat History",
+                "icon": "$(trash)"
             }
         ],
         "configuration": {

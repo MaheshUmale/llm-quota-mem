@@ -117,11 +117,18 @@ async def chat_completions(request: ChatCompletionRequest):
 
         # 4. Prepare Messages
         final_messages = []
-        if system_prompt:
-            final_messages.append(Message(role="system", content=system_prompt))
+        client_system_prompts = [m["content"] for m in request.messages if m["role"] == "system"]
+
+        # Merge Persona System Prompt with Client System Prompt (File context, etc.)
+        combined_system = system_prompt
+        if client_system_prompts:
+            combined_system += "\n\n### ADDITIONAL CONTEXT FROM CLIENT:\n" + "\n".join(client_system_prompts)
+
+        if combined_system:
+            final_messages.append(Message(role="system", content=combined_system))
 
         for m in request.messages:
-            if m["role"] != "system": # Override existing system prompt
+            if m["role"] != "system":
                 final_messages.append(Message(role=m["role"], content=m["content"]))
 
         # 5. Create LLMRequest
