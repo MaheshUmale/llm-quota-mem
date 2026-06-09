@@ -102,12 +102,19 @@ class SidebarProvider implements vscode.WebviewViewProvider {
     ) {
         this._view = webviewView;
 
+        webviewView.description = "AI Assistant";
+
         webviewView.webview.options = {
             enableScripts: true,
             localResourceRoots: [this._extensionUri]
         };
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+
+        // Restore history if it exists
+        if (this._history.length > 0) {
+            webviewView.webview.postMessage({ type: 'restoreHistory', value: this._history });
+        }
 
         webviewView.webview.onDidReceiveMessage(async (data) => {
             switch (data.type) {
@@ -171,7 +178,8 @@ class SidebarProvider implements vscode.WebviewViewProvider {
 
                 // 1. Handle Native Tool Calls
                 if (toolCalls && toolCalls.length > 0) {
-                    currentMessages.push(msg); // Push assistant message with tool calls
+                    currentMessages.push(msg);
+                    this._history.push(msg); // Keep in history for state persistence
 
                     for (const toolCall of toolCalls) {
                         const functionName = toolCall.function.name;
@@ -180,12 +188,14 @@ class SidebarProvider implements vscode.WebviewViewProvider {
                         webviewView.webview.postMessage({ type: 'status', value: `Running tool: ${functionName}...` });
                         const result = await this._executeTool(functionName, args);
 
-                        currentMessages.push({
+                        const toolMsg = {
                             role: "tool",
                             tool_call_id: toolCall.id,
                             name: functionName,
                             content: result
-                        });
+                        };
+                        currentMessages.push(toolMsg);
+                        this._history.push(toolMsg); // Keep in history for state persistence
                     }
                     continue;
                 }
@@ -204,8 +214,14 @@ class SidebarProvider implements vscode.WebviewViewProvider {
 
                         const result = await this._executeTool(toolName, toolParams);
 
-                        currentMessages.push({ role: "assistant", content: assistantMsg });
-                        currentMessages.push({ role: "user", content: `TOOL_RESULT: ${result}` });
+                        const fallbackAssistant = { role: "assistant", content: assistantMsg };
+                        const fallbackToolResult = { role: "user", content: `TOOL_RESULT: ${result}` };
+
+                        currentMessages.push(fallbackAssistant);
+                        this._history.push(fallbackAssistant);
+
+                        currentMessages.push(fallbackToolResult);
+                        this._history.push(fallbackToolResult);
 
                         continue;
                     } catch (e: any) {
@@ -361,6 +377,59 @@ class SidebarProvider implements vscode.WebviewViewProvider {
                     );
                     if (!symbols) return "No symbols found or file type not supported.";
                     return symbols.map(s => `${s.name} [${vscode.SymbolKind[s.kind]}]`).join("\n");
+                }
+                case 'grep_search': {
+                    const pattern = params.pattern;
+                    const results = await vscode.workspace.findFiles(params.include || '**/*', '**/node_modules/**');
+                    let output = "";
+                    let count = 0;
+                    const regex = new RegExp(pattern, params.case_sensitive ? '' : 'i');
+
+                    for (const file of results) {
+                        const doc = await vscode.workspace.openTextDocument(file);
+                        const text = doc.getText();
+                        if (regex.test(text)) {
+                            const lines = text.split('\n');
+                            lines.forEach((line, i) => {
+                                if (regex.test(line)) {
+                                    output += `${vscode.workspace.asRelativePath(file)}:${i + 1}: ${line.trim()}\n`;
+                                }
+                            });
+                            count++;
+                        }
+                        if (count > 100) { output += "...Too many results, truncated."; break; }
+                    }
+                    return output || "No matches found.";
+                }
+                case 'get_process_info': {
+                    // Use 'tasklist' on Windows or 'ps' on Unix, but safely
+                    return new Promise((resolve) => {
+                        const cmd = process.platform === 'win32' ? 'tasklist' : 'ps aux';
+                        const filter = params.filter ? params.filter.toLowerCase() : '';
+
+                        const child = spawn(cmd, { shell: true });
+                        let output = "";
+                        child.stdout?.on('data', (data) => output += data);
+                        child.on('close', () => {
+                            if (filter) {
+                                const lines = output.split('\n');
+                                const filtered = lines.filter(l => l.toLowerCase().includes(filter));
+                                resolve(filtered.join('\n') || `No processes found matching "${filter}"`);
+                            } else {
+                                resolve(output.slice(0, 2000)); // Limit output size
+                            }
+                        });
+                    });
+                }
+                case 'get_file_info': {
+                    const filePath = path.join(workspaceRoot, params.path);
+                    const stat = await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
+                    return JSON.stringify({
+                        size: stat.size,
+                        ctime: new Date(stat.ctime).toISOString(),
+                        mtime: new Date(stat.mtime).toISOString(),
+                        type: stat.type === vscode.FileType.Directory ? 'Directory' : 'File'
+                    }, null, 2);
                 }
                 default:
                     return `Unknown tool: ${tool}`;
