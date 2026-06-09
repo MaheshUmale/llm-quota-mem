@@ -151,3 +151,4 @@ vscode-extension/node_modules
 vscode-extension/out
 # Keep the VSIX for easy local installation as requested
 !vscode-extension/llm-quota-mem.vsix
+keys.json
